@@ -145,6 +145,7 @@ export default function ProjectIntakePage() {
           canWrite={canWrite}
           confirming={confirm.isPending}
           onConfirm={() => confirm.mutate()}
+          blueprintHref={`/dashboard/${workspaceId}/projects/${projectId}/blueprint`}
         />
       </div>
     </div>
@@ -191,12 +192,14 @@ function RequirementsPanel({
   canWrite,
   confirming,
   onConfirm,
+  blueprintHref,
 }: {
   requirements: Requirements | null;
   loading: boolean;
   canWrite: boolean;
   confirming: boolean;
   onConfirm: () => void;
+  blueprintHref: string;
 }) {
   return (
     <aside className="h-fit rounded-xl border border-slate-800 bg-slate-900/50 p-4">
@@ -248,9 +251,12 @@ function RequirementsPanel({
             </Button>
           )}
           {requirements.status === "confirmed" && (
-            <p className="rounded-lg bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
-              Confirmed — ready for blueprint generation (coming in the next milestone).
-            </p>
+            <Link
+              href={blueprintHref}
+              className="block rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-emerald-500"
+            >
+              Generate blueprint →
+            </Link>
           )}
         </div>
       )}

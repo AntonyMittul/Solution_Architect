@@ -99,6 +99,82 @@ export interface PostMessageResult {
   resumed: boolean;
 }
 
+export type ArtifactType =
+  | "architecture_doc"
+  | "tech_stack"
+  | "api_spec"
+  | "db_schema"
+  | "diagram"
+  | "cost_estimate"
+  | "design_doc";
+
+export interface Provenance {
+  run_id: string;
+  agent: string;
+  model: string;
+  source: string;
+  requirements_version: number;
+}
+
+export interface ArtifactVersionData {
+  version: number;
+  content: Record<string, unknown>;
+  provenance: Provenance;
+  created_at: string;
+}
+
+export interface ArtifactSummary {
+  type: ArtifactType;
+  is_stale: boolean;
+  latest: ArtifactVersionData | null;
+}
+
+export interface StartBlueprintResponse {
+  run_id: string;
+  status: string;
+}
+
+// Artifact content shapes (the viewers narrow `content` to these).
+export interface ArchitectureContent {
+  overview: string;
+  components: { name: string; type: string; responsibility: string }[];
+  data_flows: string[];
+  key_decisions: { decision: string; rationale: string }[];
+}
+export interface TechStackContent {
+  choices: { layer: string; choice: string; alternatives: string[]; rationale: string }[];
+}
+export interface ApiSpecContent {
+  title: string;
+  version: string;
+  endpoints: { method: string; path: string; summary: string }[];
+}
+export interface DbSchemaContent {
+  tables: {
+    name: string;
+    columns: { name: string; type: string; nullable: boolean }[];
+    primary_key: string[];
+  }[];
+}
+export interface DiagramContent {
+  nodes: { id: string; label: string; type: string }[];
+  edges: { source: string; target: string; label: string }[];
+}
+export interface CostContent {
+  currency: string;
+  line_items: {
+    service: string;
+    monthly_low: number;
+    monthly_expected: number;
+    monthly_high: number;
+    notes: string;
+  }[];
+  pricing_note: string;
+}
+export interface DesignDocContent {
+  markdown: string;
+}
+
 const WRITE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin", "member"]);
 const MANAGE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin"]);
 
