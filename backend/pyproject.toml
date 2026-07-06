@@ -14,6 +14,9 @@ dependencies = [
     "redis>=5.2",
     "structlog>=24.4",
     "python-ulid>=3.0",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.10",
+    "email-validator>=2.2",
 ]
 
 [dependency-groups]
@@ -60,22 +63,26 @@ include_external_packages = true
 [[tool.importlinter.contracts]]
 name = "Feature modules are independent"
 type = "independence"
-modules = ["aisa.identity", "aisa.orchestration"]
+modules = ["aisa.identity", "aisa.orchestration", "aisa.projects"]
+# Feature API routers may use the platform's HTTP-edge dependencies; the
+# composition root (container) is the one sanctioned meeting point, so the
+# deps -> container edge is excluded from transitive independence analysis.
+ignore_imports = ["aisa.platform.api.deps -> aisa.platform.container"]
 
 [[tool.importlinter.contracts]]
 name = "Shared kernel imports no feature modules"
 type = "forbidden"
 source_modules = ["aisa.shared"]
-forbidden_modules = ["aisa.identity", "aisa.orchestration", "aisa.platform"]
+forbidden_modules = ["aisa.identity", "aisa.orchestration", "aisa.projects", "aisa.platform"]
 
 [[tool.importlinter.contracts]]
-name = "Orchestration layering (api/infra -> application -> domain)"
+name = "Module layering (api/infra -> application -> domain)"
 type = "layers"
 layers = ["api", "infrastructure", "application", "domain"]
-containers = ["aisa.orchestration"]
+containers = ["aisa.orchestration", "aisa.identity", "aisa.projects"]
 
 [[tool.importlinter.contracts]]
 name = "Domain layers are framework-free"
 type = "forbidden"
-source_modules = ["aisa.orchestration.domain", "aisa.identity.domain"]
+source_modules = ["aisa.orchestration.domain", "aisa.identity.domain", "aisa.projects.domain"]
 forbidden_modules = ["fastapi", "sqlalchemy", "redis", "alembic", "pydantic_settings"]

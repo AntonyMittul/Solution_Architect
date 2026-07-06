@@ -7,40 +7,15 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
-from aisa.orchestration.application.use_cases import CreateRun, ExecutePingRun, GetRun
 from aisa.platform.app import create_app
 from aisa.platform.container import Container
 from aisa.shared.clock import SystemClock
-from aisa.shared.config import Settings
-from aisa.shared.ids import new_id
-from tests.fakes import InlineJobQueue, InMemoryRunEvents, InMemoryRunRepository
+from tests.helpers import make_walking_skeleton_container
 
 
 @pytest.fixture
 def container() -> Container:
-    repo = InMemoryRunRepository()
-    events = InMemoryRunEvents()
-    clock = SystemClock()
-    queue = InlineJobQueue()
-    executor = ExecutePingRun(repo, events, clock)
-
-    async def handle(payload: dict[str, str]) -> None:
-        await executor.execute(payload["run_id"])
-
-    queue.handlers["run.execute"] = handle
-    return Container(
-        settings=Settings(),
-        engine=None,
-        redis=None,
-        clock=clock,
-        run_repository=repo,
-        job_queue=queue,
-        run_event_sink=events,
-        run_event_stream=events,
-        create_run=CreateRun(repo, queue, clock, new_id),
-        get_run=GetRun(repo),
-        execute_ping_run=executor,
-    )
+    return make_walking_skeleton_container(SystemClock())
 
 
 @pytest.fixture

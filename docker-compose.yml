@@ -32,7 +32,9 @@ services:
     command: sh -c "alembic upgrade head && uvicorn aisa.platform.app:app --host 0.0.0.0 --port 8000"
     environment: &backend_env
       AISA_ENV: dev
-      AISA_DATABASE_URL: postgresql+asyncpg://aisa:aisa@postgres:5432/aisa
+      # Runtime connects as the restricted role (RLS enforced); migrations as the owner.
+      AISA_DATABASE_URL: postgresql+asyncpg://aisa_app:aisa_app@postgres:5432/aisa
+      AISA_DATABASE_ADMIN_URL: postgresql+asyncpg://aisa:aisa@postgres:5432/aisa
       AISA_REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"

@@ -18,8 +18,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Env var wins over alembic.ini (12-factor).
-database_url = os.environ.get("AISA_DATABASE_URL")
+# Env var wins over alembic.ini (12-factor). Migrations run as the admin
+# role (table owner); the app runtime uses the restricted aisa_app role.
+database_url = os.environ.get("AISA_DATABASE_ADMIN_URL") or os.environ.get("AISA_DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 

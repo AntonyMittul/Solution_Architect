@@ -3,10 +3,46 @@
 from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
+from aisa.identity.application.ports import RefreshTokenRecord
 from aisa.orchestration.application.ports import RunEvent
 from aisa.orchestration.domain.run import Run
 from aisa.shared.errors import NotFoundError
+
+
+class FakeClock:
+    def __init__(self, start: datetime | None = None) -> None:
+        self.current = start or datetime(2026, 7, 6, tzinfo=UTC)
+
+    def now(self) -> datetime:
+        return self.current
+
+    def advance(self, delta: timedelta) -> None:
+        self.current += delta
+
+
+class FakeRefreshTokenRepository:
+    def __init__(self) -> None:
+        self.records: dict[str, RefreshTokenRecord] = {}  # keyed by record id
+
+    async def add(self, record: RefreshTokenRecord) -> None:
+        self.records[record.id] = replace(record)
+
+    async def get_by_hash(self, token_hash: str) -> RefreshTokenRecord | None:
+        for record in self.records.values():
+            if record.token_hash == token_hash:
+                return replace(record)
+        return None
+
+    async def mark_used(self, record_id: str, now: datetime) -> None:
+        self.records[record_id].used_at = now
+
+    async def revoke_family(self, family_id: str, now: datetime) -> None:
+        for record in self.records.values():
+            if record.family_id == family_id and record.revoked_at is None:
+                record.revoked_at = now
+
 
 TERMINAL_EVENT_TYPES = frozenset({"run.completed", "run.failed", "run.cancelled"})
 

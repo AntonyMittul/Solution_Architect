@@ -3,11 +3,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from aisa.identity.api.auth_router import router as auth_router
+from aisa.identity.api.workspace_router import router as workspace_router
 from aisa.orchestration.api.router import router as runs_router
 from aisa.platform.api.health import router as health_router
 from aisa.platform.container import Container
 from aisa.platform.middleware import RequestContextMiddleware
 from aisa.platform.problem import register_problem_handlers
+from aisa.projects.api.router import router as projects_router
 from aisa.shared.config import Settings
 from aisa.shared.logging import configure_logging
 
@@ -36,6 +39,9 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     register_problem_handlers(app)
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(workspace_router)
+    app.include_router(projects_router)
     app.include_router(runs_router)
     return app
 

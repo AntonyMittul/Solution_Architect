@@ -48,3 +48,24 @@ class MembershipRow(Base):
     )
     user_id: Mapped[str] = mapped_column(String(26), ForeignKey("users.id"), nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class RefreshTokenRow(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(26), ForeignKey("users.id"), nullable=False)
+    family_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EmailVerificationTokenRow(Base):
+    __tablename__ = "email_verification_tokens"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(26), ForeignKey("users.id"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

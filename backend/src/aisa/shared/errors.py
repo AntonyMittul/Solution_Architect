@@ -32,3 +32,21 @@ class UnsupportedOperationError(AppError):
     code = "unsupported_operation"
     title = "Unsupported operation"
     status = 400
+
+
+class UnauthorizedError(AppError):
+    code = "unauthorized"
+    title = "Authentication required"
+    status = 401
+
+
+class ForbiddenError(AppError):
+    code = "forbidden"
+    title = "Insufficient permissions"
+    status = 403
+
+
+class DomainValidationError(AppError):
+    code = "invalid_input"
+    title = "Invalid input"
+    status = 400
