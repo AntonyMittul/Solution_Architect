@@ -107,7 +107,7 @@ containers = [
 name = "Blueprint layering (api -> application -> domain)"
 type = "layers"
 layers = ["api", "application", "domain"]
-containers = ["aisa.blueprint"]
+containers = ["aisa.blueprint", "aisa.exports"]
 
 [[tool.importlinter.contracts]]
 name = "LLM layering (infra -> application -> domain)"
@@ -121,5 +121,6 @@ type = "forbidden"
 source_modules = [
     "aisa.orchestration.domain", "aisa.identity.domain", "aisa.projects.domain",
     "aisa.intake.domain", "aisa.llm.domain", "aisa.artifacts.domain", "aisa.blueprint.domain",
+    "aisa.exports.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "redis", "alembic", "pydantic_settings"]

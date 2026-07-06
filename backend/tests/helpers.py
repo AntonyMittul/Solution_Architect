@@ -65,5 +65,6 @@ def make_walking_skeleton_container(clock: Clock) -> Container:
         list_artifacts=unwired,
         get_artifact=unwired,
         list_artifact_versions=unwired,
+        build_project_export=unwired,
         audit=unwired,
     )

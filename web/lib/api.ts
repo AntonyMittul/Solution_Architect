@@ -61,3 +61,24 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
 };
+
+/** Fetch a file (with refresh-on-401) and trigger a browser download. */
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  let res = await fetch(path);
+  if (res.status === 401 && (await refreshOnce())) res = await fetch(path);
+  if (!res.ok) throw new ApiError(res.status, null);
+
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const name = match?.[1] ?? fallbackName;
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

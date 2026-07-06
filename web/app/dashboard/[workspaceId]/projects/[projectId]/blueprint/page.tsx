@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DiagramCanvas } from "@/components/diagram-canvas";
 import { MarkdownView } from "@/components/markdown";
 import { Banner, Button, ErrorText, Spinner } from "@/components/ui";
+import { downloadFile } from "@/lib/api";
 import { artifactsKey, useArtifacts, useStartBlueprint } from "@/features/blueprint/use-blueprint";
 import { useRequirements } from "@/features/intake/use-intake";
 import { useRunStream } from "@/features/runs/use-run-stream";
@@ -113,11 +114,26 @@ export default function BlueprintPage() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold tracking-tight">Blueprint</h2>
-        {canWrite && confirmed && (
-          <Button onClick={() => void generate()} disabled={generating}>
-            {generating ? "Generating…" : hasArtifacts ? "Regenerate" : "Generate blueprint"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {hasArtifacts && !generating && (
+            <Button
+              variant="ghost"
+              onClick={() =>
+                void downloadFile(
+                  `/api/v1/workspaces/${workspaceId}/projects/${projectId}/export`,
+                  "blueprint.zip",
+                )
+              }
+            >
+              Download .zip
+            </Button>
+          )}
+          {canWrite && confirmed && (
+            <Button onClick={() => void generate()} disabled={generating}>
+              {generating ? "Generating…" : hasArtifacts ? "Regenerate" : "Generate blueprint"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {!confirmed && (

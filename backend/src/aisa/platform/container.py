@@ -14,6 +14,7 @@ from aisa.artifacts.infrastructure.repository import SqlArtifactRepository
 from aisa.blueprint.application.agents import BlueprintAgents
 from aisa.blueprint.application.executor import BLUEPRINT_KIND, BlueprintExecutor
 from aisa.blueprint.application.use_cases import CreateBlueprintRun
+from aisa.exports.application.build_export import BuildProjectExport
 from aisa.identity.application.actor import ResolveActor
 from aisa.identity.application.auth_use_cases import (
     GetCurrentUser,
@@ -178,6 +179,7 @@ class Container:
     list_artifacts: ListArtifacts
     get_artifact: GetArtifact
     list_artifact_versions: ListArtifactVersions
+    build_project_export: BuildProjectExport
 
     audit: AuditLogger = field(kw_only=True)
 
@@ -320,6 +322,7 @@ class Container:
             list_artifacts=ListArtifacts(artifacts),
             get_artifact=GetArtifact(artifacts),
             list_artifact_versions=ListArtifactVersions(artifacts),
+            build_project_export=BuildProjectExport(artifacts, requirements, projects),
             audit=audit,
         )
 
