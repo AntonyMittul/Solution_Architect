@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { Banner, Button, ErrorText, Field, Spinner, TextInput } from "@/components/ui";
+import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useMe } from "@/features/auth/use-auth";
 import {
   useCreateProject,
@@ -66,9 +67,7 @@ export default function ProjectsPage() {
       </div>
 
       {!verified && (
-        <Banner tone="amber">
-          Verify your email address to create projects. Check your inbox for the link.
-        </Banner>
+        <VerifyEmailBanner message="Verify your email address to create projects." />
       )}
 
       {lastDeleted && (

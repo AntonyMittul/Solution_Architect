@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import structlog
 
@@ -30,6 +30,26 @@ from aisa.shared.errors import ConflictError, DomainValidationError, Unauthorize
 logger = structlog.get_logger(__name__)
 
 MIN_PASSWORD_LENGTH = 10
+
+
+async def _issue_verification_token(
+    verification_tokens: VerificationTokenRepository,
+    email_sender: EmailSender,
+    user: User,
+    now: datetime,
+    ttl: timedelta,
+) -> str:
+    """Create and persist a verification token, then hand it to the email
+    sender. Returns the plain token (exposed to the user only via email, or in
+    dev). Shared by registration and resend."""
+    token = secrets.token_urlsafe(32)
+    await verification_tokens.add(
+        user_id=user.id,
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        expires_at=now + ttl,
+    )
+    await email_sender.send_verification(user.email, token)
+    return token
 
 
 @dataclass(frozen=True)
@@ -103,18 +123,52 @@ class RegisterUser:
             )
         )
 
-        token = secrets.token_urlsafe(32)
-        await self._verification_tokens.add(
-            user_id=user.id,
-            token_hash=hashlib.sha256(token.encode()).hexdigest(),
-            expires_at=now + self._verification_ttl,
+        token = await _issue_verification_token(
+            self._verification_tokens, self._email_sender, user, now, self._verification_ttl
         )
-        await self._email_sender.send_verification(user.email, token)
         await self._audit.record(
             AuditEntry(actor=f"user:{user.id}", action="auth.registered", target=user.email)
         )
         logger.info("auth.registered", user_id=user.id)
         return RegistrationResult(user=user, workspace=workspace, verification_token=token)
+
+
+class ResendVerification:
+    """Re-issue a verification token for the signed-in user. Returns the plain
+    token so the API can expose it in dev (where no SMTP is configured)."""
+
+    def __init__(
+        self,
+        users: UserRepository,
+        verification_tokens: VerificationTokenRepository,
+        email_sender: EmailSender,
+        audit: AuditLogger,
+        clock: Clock,
+        verification_ttl: timedelta,
+    ) -> None:
+        self._users = users
+        self._verification_tokens = verification_tokens
+        self._email_sender = email_sender
+        self._audit = audit
+        self._clock = clock
+        self._verification_ttl = verification_ttl
+
+    async def execute(self, user_id: str) -> str:
+        user = await self._users.get(user_id)
+        if user.email_verified:
+            raise ConflictError("Email is already verified")
+        token = await _issue_verification_token(
+            self._verification_tokens,
+            self._email_sender,
+            user,
+            self._clock.now(),
+            self._verification_ttl,
+        )
+        await self._audit.record(
+            AuditEntry(actor=f"user:{user.id}", action="auth.verification_resent")
+        )
+        logger.info("auth.verification_resent", user_id=user.id)
+        return token
 
 
 class VerifyEmail:

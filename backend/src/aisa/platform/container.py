@@ -19,6 +19,7 @@ from aisa.identity.application.auth_use_cases import (
     GetCurrentUser,
     LoginUser,
     RegisterUser,
+    ResendVerification,
     VerifyEmail,
 )
 from aisa.identity.application.ports import AccessTokenCodec
@@ -146,6 +147,7 @@ class Container:
     token_service: TokenService
     register_user: RegisterUser
     verify_email: VerifyEmail
+    resend_verification: ResendVerification
     login_user: LoginUser
     get_current_user: GetCurrentUser
     resolve_actor: ResolveActor
@@ -284,6 +286,14 @@ class Container:
                 verification_ttl=timedelta(hours=settings.verification_token_ttl_hours),
             ),
             verify_email=VerifyEmail(users, verification_tokens, audit, clock),
+            resend_verification=ResendVerification(
+                users,
+                verification_tokens,
+                email_sender,
+                audit,
+                clock,
+                verification_ttl=timedelta(hours=settings.verification_token_ttl_hours),
+            ),
             login_user=LoginUser(users, hasher, token_service, audit),
             get_current_user=GetCurrentUser(users),
             resolve_actor=ResolveActor(memberships, users),

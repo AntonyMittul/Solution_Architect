@@ -51,7 +51,12 @@ class JwtAccessTokenCodec:
 
 class LoggingEmailSender:
     """Dev/test adapter: logs instead of sending. Real SMTP lands with the
-    notifications module (roadmap M4)."""
+    notifications module (roadmap M4). The log includes a ready-to-use verify
+    path so a developer can complete verification without email."""
 
     async def send_verification(self, email: str, token: str) -> None:
-        logger.info("email.verification", to=email, token=token)
+        logger.info(
+            "email.verification (dev: no SMTP configured)",
+            to=email,
+            verify_path=f"/verify?token={token}",
+        )

@@ -54,6 +54,27 @@ async def test_wrong_password_and_duplicate_email(db_client: httpx.AsyncClient) 
     assert dup.status_code == 409
 
 
+async def test_resend_verification_completes_verification(db_client: httpx.AsyncClient) -> None:
+    await register(db_client, "dan@example.com")
+    await login(db_client, "dan@example.com")
+
+    # A user who missed the (stubbed) email can resend and, in dev, gets the
+    # token back to complete verification in-app.
+    resent = await db_client.post("/api/v1/auth/resend-verification")
+    assert resent.status_code == 200
+    token = resent.json()["verification_token"]
+    assert token
+    assert (await db_client.post("/api/v1/auth/verify", json={"token": token})).status_code == 200
+    assert (await db_client.get("/api/v1/auth/me")).json()["email_verified"] is True
+
+    # Resending once already verified is a conflict.
+    assert (await db_client.post("/api/v1/auth/resend-verification")).status_code == 409
+
+
+async def test_resend_verification_requires_auth(db_client: httpx.AsyncClient) -> None:
+    assert (await db_client.post("/api/v1/auth/resend-verification")).status_code == 401
+
+
 async def test_unverified_email_blocks_project_creation(db_client: httpx.AsyncClient) -> None:
     result = await register(db_client, "dan@example.com")
     ws = result["workspace_id"]

@@ -35,6 +35,17 @@ export function useVerifyEmail() {
   });
 }
 
+interface ResendResult {
+  sent: boolean;
+  verification_token: string | null;
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => api.post<ResendResult>("/api/v1/auth/resend-verification"),
+  });
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({

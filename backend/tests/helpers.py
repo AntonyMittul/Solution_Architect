@@ -40,6 +40,7 @@ def make_walking_skeleton_container(clock: Clock) -> Container:
         token_service=unwired,
         register_user=unwired,
         verify_email=unwired,
+        resend_verification=unwired,
         login_user=unwired,
         get_current_user=unwired,
         resolve_actor=unwired,

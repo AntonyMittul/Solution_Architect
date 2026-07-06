@@ -102,6 +102,22 @@ async def verify_email(body: VerifyEmailRequest, container: ContainerDep) -> Use
     return UserResponse.from_domain(user)
 
 
+class ResendVerificationResponse(BaseModel):
+    sent: bool
+    # Populated only in dev (no SMTP); lets the UI complete verification in-app.
+    verification_token: str | None = None
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    user_id: CurrentUserId, container: ContainerDep
+) -> ResendVerificationResponse:
+    token = await container.resend_verification.execute(user_id)
+    return ResendVerificationResponse(
+        sent=True, verification_token=token if container.settings.is_dev else None
+    )
+
+
 @router.post("/login")
 async def login(body: LoginRequest, response: Response, container: ContainerDep) -> UserResponse:
     pair = await container.login_user.execute(email=body.email, password=body.password)
