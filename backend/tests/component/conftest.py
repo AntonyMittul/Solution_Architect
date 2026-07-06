@@ -32,6 +32,7 @@ ADMIN_URL = f"postgresql+asyncpg://aisa:aisa@{PG_HOST}:{PG_PORT}/{TEST_DB}"
 APP_URL = f"postgresql+asyncpg://aisa_app:aisa_app@{PG_HOST}:{PG_PORT}/{TEST_DB}"
 
 ALL_TABLES = (
+    "artifact_dependencies, artifact_versions, artifacts, "
     "llm_usage, requirement_docs, messages, threads, "
     "audit_log, projects, email_verification_tokens, refresh_tokens, "
     "agent_events, runs, memberships, workspaces, users"

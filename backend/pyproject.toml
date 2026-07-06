@@ -18,6 +18,8 @@ dependencies = [
     "pyjwt>=2.10",
     "email-validator>=2.2",
     "google-genai>=1.0",
+    "langgraph>=0.2.60",
+    "sqlglot>=25.0",
 ]
 
 [dependency-groups]
@@ -97,7 +99,15 @@ forbidden_modules = [
 name = "Module layering (api/infra -> application -> domain)"
 type = "layers"
 layers = ["api", "infrastructure", "application", "domain"]
-containers = ["aisa.orchestration", "aisa.identity", "aisa.projects", "aisa.intake"]
+containers = [
+    "aisa.orchestration", "aisa.identity", "aisa.projects", "aisa.intake", "aisa.artifacts",
+]
+
+[[tool.importlinter.contracts]]
+name = "Blueprint layering (api -> application -> domain)"
+type = "layers"
+layers = ["api", "application", "domain"]
+containers = ["aisa.blueprint"]
 
 [[tool.importlinter.contracts]]
 name = "LLM layering (infra -> application -> domain)"
@@ -110,6 +120,6 @@ name = "Domain layers are framework-free"
 type = "forbidden"
 source_modules = [
     "aisa.orchestration.domain", "aisa.identity.domain", "aisa.projects.domain",
-    "aisa.intake.domain", "aisa.llm.domain",
+    "aisa.intake.domain", "aisa.llm.domain", "aisa.artifacts.domain", "aisa.blueprint.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "redis", "alembic", "pydantic_settings"]

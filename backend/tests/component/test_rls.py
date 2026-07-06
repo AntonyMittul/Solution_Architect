@@ -23,7 +23,9 @@ async def seeded_engines(test_database: str) -> AsyncIterator[tuple[AsyncEngine,
     admin = create_async_engine(ADMIN_URL)
     app = create_async_engine(APP_URL)
     async with admin.begin() as conn:
-        await conn.execute(text("TRUNCATE requirement_docs, projects, workspaces CASCADE"))
+        await conn.execute(
+            text("TRUNCATE artifacts, requirement_docs, projects, workspaces CASCADE")
+        )
         for ws, project in (("wsA", "projA"), ("wsB", "projB")):
             await conn.execute(
                 text(
@@ -48,6 +50,13 @@ async def seeded_engines(test_database: str) -> AsyncIterator[tuple[AsyncEngine,
                     " (:id, :ws, :proj, 1, 'draft', '{}', 'agent', :now)"
                 ),
                 {"id": f"req{ws}", "ws": ws, "proj": project, "now": NOW},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO artifacts (id, workspace_id, project_id, type, is_stale)"
+                    " VALUES (:id, :ws, :proj, 'diagram', false)"
+                ),
+                {"id": f"art{ws}", "ws": ws, "proj": project},
             )
     yield admin, app
     await app.dispose()
@@ -107,6 +116,19 @@ async def test_rls_filters_requirement_docs_per_tenant(
                 text("SELECT set_config('app.workspace_id', :ws, true)"), {"ws": workspace_id}
             )
             rows = await conn.execute(text("SELECT id FROM requirement_docs ORDER BY id"))
+            assert [row[0] for row in rows] == expected
+
+
+async def test_rls_filters_artifacts_per_tenant(
+    seeded_engines: tuple[AsyncEngine, AsyncEngine],
+) -> None:
+    _, app = seeded_engines
+    for workspace_id, expected in (("wsA", ["artwsA"]), ("wsB", ["artwsB"])):
+        async with app.connect() as conn:
+            await conn.execute(
+                text("SELECT set_config('app.workspace_id', :ws, true)"), {"ws": workspace_id}
+            )
+            rows = await conn.execute(text("SELECT id FROM artifacts ORDER BY id"))
             assert [row[0] for row in rows] == expected
 
 

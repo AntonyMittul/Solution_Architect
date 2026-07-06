@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from aisa.artifacts.api.router import router as artifacts_router
+from aisa.blueprint.api.router import router as blueprint_router
 from aisa.identity.api.auth_router import router as auth_router
 from aisa.identity.api.workspace_router import router as workspace_router
 from aisa.intake.api.router import router as intake_router
@@ -44,6 +46,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(workspace_router)
     app.include_router(projects_router)
     app.include_router(intake_router)
+    app.include_router(blueprint_router)
+    app.include_router(artifacts_router)
     app.include_router(runs_router)
     return app
 

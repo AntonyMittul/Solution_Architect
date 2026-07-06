@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import aisa.artifacts.infrastructure.tables
 import aisa.identity.infrastructure.tables
 import aisa.intake.infrastructure.tables
 import aisa.llm.infrastructure.usage
@@ -21,6 +22,7 @@ _ = (
     aisa.projects.infrastructure.tables,
     aisa.intake.infrastructure.tables,
     aisa.llm.infrastructure.usage,
+    aisa.artifacts.infrastructure.tables,
 )
 
 config = context.config

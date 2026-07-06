@@ -60,5 +60,9 @@ def make_walking_skeleton_container(clock: Clock) -> Container:
         list_messages=unwired,
         get_requirements=unwired,
         confirm_requirements=unwired,
+        create_blueprint_run=unwired,
+        list_artifacts=unwired,
+        get_artifact=unwired,
+        list_artifact_versions=unwired,
         audit=unwired,
     )

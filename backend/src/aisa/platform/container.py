@@ -5,6 +5,15 @@ import structlog
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
+from aisa.artifacts.application.use_cases import (
+    GetArtifact,
+    ListArtifacts,
+    ListArtifactVersions,
+)
+from aisa.artifacts.infrastructure.repository import SqlArtifactRepository
+from aisa.blueprint.application.agents import BlueprintAgents
+from aisa.blueprint.application.executor import BLUEPRINT_KIND, BlueprintExecutor
+from aisa.blueprint.application.use_cases import CreateBlueprintRun
 from aisa.identity.application.actor import ResolveActor
 from aisa.identity.application.auth_use_cases import (
     GetCurrentUser,
@@ -88,7 +97,7 @@ from aisa.shared.ids import new_id
 
 logger = structlog.get_logger(__name__)
 
-KNOWN_RUN_KINDS = frozenset({"ping", INTAKE_KIND})
+KNOWN_RUN_KINDS = frozenset({"ping", INTAKE_KIND, BLUEPRINT_KIND})
 
 
 def _build_llm_provider(settings: Settings) -> LLMProvider:
@@ -162,6 +171,12 @@ class Container:
     get_requirements: GetRequirements
     confirm_requirements: ConfirmRequirements
 
+    # blueprint + artifacts
+    create_blueprint_run: CreateBlueprintRun
+    list_artifacts: ListArtifacts
+    get_artifact: GetArtifact
+    list_artifact_versions: ListArtifactVersions
+
     audit: AuditLogger = field(kw_only=True)
 
     @classmethod
@@ -223,6 +238,20 @@ class Container:
             max_rounds=settings.intake_max_rounds,
         )
 
+        # artifacts + blueprint
+        artifacts = SqlArtifactRepository(session_factory, clock)
+        blueprint_agents = BlueprintAgents(llm)
+        blueprint_executor = BlueprintExecutor(
+            run_repository,
+            run_event_sink,
+            artifacts,
+            requirements,
+            projects,
+            blueprint_agents,
+            clock,
+            model=settings.llm_model_quality,
+        )
+
         return cls(
             settings=settings,
             engine=engine,
@@ -235,7 +264,11 @@ class Container:
             create_run=create_run,
             get_run=GetRun(run_repository),
             execute_ping_run=ping_executor,
-            run_executors={"ping": ping_executor, INTAKE_KIND: intake_executor},
+            run_executors={
+                "ping": ping_executor,
+                INTAKE_KIND: intake_executor,
+                BLUEPRINT_KIND: blueprint_executor,
+            },
             access_codec=access_codec,
             token_service=token_service,
             register_user=RegisterUser(
@@ -273,6 +306,10 @@ class Container:
             list_messages=ListMessages(threads, messages),
             get_requirements=GetRequirements(requirements),
             confirm_requirements=ConfirmRequirements(requirements, audit),
+            create_blueprint_run=CreateBlueprintRun(requirements, create_run),
+            list_artifacts=ListArtifacts(artifacts),
+            get_artifact=GetArtifact(artifacts),
+            list_artifact_versions=ListArtifactVersions(artifacts),
             audit=audit,
         )
 
