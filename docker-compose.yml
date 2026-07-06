@@ -36,6 +36,10 @@ services:
       AISA_DATABASE_URL: postgresql+asyncpg://aisa_app:aisa_app@postgres:5432/aisa
       AISA_DATABASE_ADMIN_URL: postgresql+asyncpg://aisa:aisa@postgres:5432/aisa
       AISA_REDIS_URL: redis://redis:6379/0
+      # Key-less by default so the stack runs out of the box. For real intake,
+      # set AISA_LLM_PROVIDER=gemini and AISA_GEMINI_API_KEY in a .env file.
+      AISA_LLM_PROVIDER: ${AISA_LLM_PROVIDER:-fake}
+      AISA_GEMINI_API_KEY: ${AISA_GEMINI_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

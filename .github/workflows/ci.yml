@@ -22,6 +22,12 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U aisa -d aisa"
           --health-interval 3s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 3s --health-retries 10
     env:
       AISA_DATABASE_URL: postgresql+asyncpg://aisa:aisa@localhost:5432/aisa
     steps:
