@@ -31,6 +31,12 @@ uv run python -m aisa.platform.worker                        # terminal 2: worke
 cd ../web && npm install && npm run dev                      # terminal 3: web -> http://localhost:3000
 ```
 
+**LLM (Gemini):** the requirements-intake agent uses Google Gemini
+(`gemini-3.1-flash-lite`). Set `AISA_GEMINI_API_KEY` in `backend/.env` to use it, or run with
+`AISA_LLM_PROVIDER=fake` for a deterministic, key-less stub (also what CI uses). See
+[ADR-002](docs/adr/ADR-002-llm-gemini-and-agent-layer.md) and
+[ADR-003](docs/adr/ADR-003-defer-langgraph-to-m3.md) for the provider and orchestration decisions.
+
 Quality gates (same as CI): `cd backend && uv run ruff check . && uv run mypy && uv run lint-imports && uv run pytest`
 End-to-end smoke test: `cd backend && uv run python scripts/smoke.py`
 Full stack in containers: `docker compose up --build`

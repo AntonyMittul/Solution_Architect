@@ -10,30 +10,62 @@ from aisa.shared.errors import UnsupportedOperationError
 
 logger = structlog.get_logger(__name__)
 
-SUPPORTED_KINDS = frozenset({"ping"})
-
 
 class CreateRun:
+    """Creates a run of any kind and enqueues it. The worker dispatches by kind
+    to the registered executor, so adding a run kind needs no change here."""
+
     def __init__(
         self,
         repository: RunRepository,
         queue: JobQueue,
         clock: Clock,
         id_factory: Callable[[], str],
+        known_kinds: frozenset[str],
     ) -> None:
         self._repository = repository
         self._queue = queue
         self._clock = clock
         self._id_factory = id_factory
+        self._known_kinds = known_kinds
 
-    async def execute(self, kind: str) -> Run:
-        if kind not in SUPPORTED_KINDS:
+    async def execute(
+        self,
+        kind: str,
+        *,
+        workspace_id: str | None = None,
+        project_id: str | None = None,
+        triggered_by: str | None = None,
+        input: dict[str, object] | None = None,
+    ) -> Run:
+        if kind not in self._known_kinds:
             raise UnsupportedOperationError(f"Unsupported run kind '{kind}'")
-        run = Run.create(run_id=self._id_factory(), kind=kind, now=self._clock.now())
+        run = Run.create(
+            run_id=self._id_factory(),
+            kind=kind,
+            now=self._clock.now(),
+            workspace_id=workspace_id,
+            project_id=project_id,
+            triggered_by=triggered_by,
+            input=input,
+        )
         await self._repository.add(run)
-        await self._queue.enqueue("run.execute", {"run_id": run.id})
-        logger.info("run.created", run_id=run.id, kind=kind)
+        await self._queue.enqueue("run.execute", {"run_id": run.id, "kind": run.kind})
+        logger.info("run.created", run_id=run.id, kind=kind, workspace_id=workspace_id)
         return run
+
+
+class EnqueueRunContinuation:
+    """Re-enqueue an existing run (e.g. a needs_input run after the user
+    answers). The executor decides whether that means start or resume."""
+
+    def __init__(self, repository: RunRepository, queue: JobQueue) -> None:
+        self._repository = repository
+        self._queue = queue
+
+    async def execute(self, run_id: str) -> None:
+        run = await self._repository.get(run_id)
+        await self._queue.enqueue("run.execute", {"run_id": run.id, "kind": run.kind})
 
 
 class GetRun:

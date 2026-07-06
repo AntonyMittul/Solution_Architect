@@ -8,11 +8,20 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import aisa.identity.infrastructure.tables
+import aisa.intake.infrastructure.tables
+import aisa.llm.infrastructure.usage
 import aisa.orchestration.infrastructure.tables
+import aisa.projects.infrastructure.tables
 from aisa.shared.db import Base
 
 # Table modules must be imported so Base.metadata sees every table.
-_ = (aisa.identity.infrastructure.tables, aisa.orchestration.infrastructure.tables)
+_ = (
+    aisa.identity.infrastructure.tables,
+    aisa.orchestration.infrastructure.tables,
+    aisa.projects.infrastructure.tables,
+    aisa.intake.infrastructure.tables,
+    aisa.llm.infrastructure.usage,
+)
 
 config = context.config
 if config.config_file_name is not None:

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 
+import structlog
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
@@ -33,13 +34,37 @@ from aisa.identity.infrastructure.security import (
     JwtAccessTokenCodec,
     LoggingEmailSender,
 )
+from aisa.intake.application.agent import RequirementsAnalyst
+from aisa.intake.application.executor import INTAKE_KIND, IntakeExecutor
+from aisa.intake.application.use_cases import (
+    ConfirmRequirements,
+    GetRequirements,
+    ListMessages,
+    PostMessage,
+)
+from aisa.intake.infrastructure.repositories import (
+    SqlMessageRepository,
+    SqlRequirementRepository,
+    SqlThreadRepository,
+)
+from aisa.llm.application.ports import LLMProvider, UsageRecorder
+from aisa.llm.application.service import StructuredLLM
+from aisa.llm.domain.messages import ModelTier
+from aisa.llm.infrastructure.fake import FakeLLMProvider
+from aisa.llm.infrastructure.usage import SqlUsageRecorder
 from aisa.orchestration.application.ports import (
     JobQueue,
     RunEventSink,
     RunEventStream,
+    RunExecutor,
     RunRepository,
 )
-from aisa.orchestration.application.use_cases import CreateRun, ExecutePingRun, GetRun
+from aisa.orchestration.application.use_cases import (
+    CreateRun,
+    EnqueueRunContinuation,
+    ExecutePingRun,
+    GetRun,
+)
 from aisa.orchestration.infrastructure.redis_events import (
     PgRedisRunEventSink,
     PgRedisRunEventStream,
@@ -61,6 +86,32 @@ from aisa.shared.clock import Clock, SystemClock
 from aisa.shared.config import Settings
 from aisa.shared.ids import new_id
 
+logger = structlog.get_logger(__name__)
+
+KNOWN_RUN_KINDS = frozenset({"ping", INTAKE_KIND})
+
+
+def _build_llm_provider(settings: Settings) -> LLMProvider:
+    if settings.llm_provider == "fake":
+        # Key-less provider: auto-generates schema-valid minimal output so the
+        # whole app runs locally without Gemini. Tests inject scripted fakes.
+        return FakeLLMProvider()
+    if not settings.gemini_api_key:
+        logger.warning("llm.no_api_key", detail="AISA_GEMINI_API_KEY unset; intake will fail")
+    from google import genai  # imported lazily so tooling without creds still loads
+
+    from aisa.llm.infrastructure.gemini import GeminiProvider
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    return GeminiProvider(
+        client,
+        models={
+            ModelTier.QUALITY: settings.llm_model_quality,
+            ModelTier.FAST: settings.llm_model_fast,
+        },
+        max_output_tokens=settings.llm_max_output_tokens,
+    )
+
 
 @dataclass
 class Container:
@@ -79,6 +130,7 @@ class Container:
     create_run: CreateRun
     get_run: GetRun
     execute_ping_run: ExecutePingRun
+    run_executors: dict[str, RunExecutor]
 
     # identity / auth
     access_codec: AccessTokenCodec
@@ -103,10 +155,17 @@ class Container:
     delete_project: DeleteProject
     restore_project: RestoreProject
 
+    # intake
+    llm: StructuredLLM
+    post_message: PostMessage
+    list_messages: ListMessages
+    get_requirements: GetRequirements
+    confirm_requirements: ConfirmRequirements
+
     audit: AuditLogger = field(kw_only=True)
 
     @classmethod
-    def build(cls, settings: Settings) -> "Container":
+    def build(cls, settings: Settings, *, llm_provider: LLMProvider | None = None) -> "Container":
         engine = create_async_engine(settings.database_url, pool_pre_ping=True)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -117,6 +176,9 @@ class Container:
         job_queue = RedisStreamJobQueue(redis)
         run_event_sink = PgRedisRunEventSink(session_factory, redis, clock)
         run_event_stream = PgRedisRunEventStream(session_factory, redis)
+        create_run = CreateRun(run_repository, job_queue, clock, new_id, KNOWN_RUN_KINDS)
+        continue_run = EnqueueRunContinuation(run_repository, job_queue)
+        ping_executor = ExecutePingRun(run_repository, run_event_sink, clock)
 
         # identity
         users = SqlUserRepository(session_factory)
@@ -141,6 +203,26 @@ class Container:
         # projects
         projects = SqlProjectRepository(session_factory)
 
+        # llm + intake
+        provider = llm_provider or _build_llm_provider(settings)
+        usage_recorder: UsageRecorder = SqlUsageRecorder(session_factory, clock)
+        llm = StructuredLLM(provider, usage_recorder)
+        threads = SqlThreadRepository(session_factory, clock)
+        messages = SqlMessageRepository(session_factory)
+        requirements = SqlRequirementRepository(session_factory)
+        analyst = RequirementsAnalyst(llm)
+        intake_executor = IntakeExecutor(
+            run_repository,
+            run_event_sink,
+            threads,
+            messages,
+            requirements,
+            projects,
+            analyst,
+            clock,
+            max_rounds=settings.intake_max_rounds,
+        )
+
         return cls(
             settings=settings,
             engine=engine,
@@ -150,9 +232,10 @@ class Container:
             job_queue=job_queue,
             run_event_sink=run_event_sink,
             run_event_stream=run_event_stream,
-            create_run=CreateRun(run_repository, job_queue, clock, new_id),
+            create_run=create_run,
             get_run=GetRun(run_repository),
-            execute_ping_run=ExecutePingRun(run_repository, run_event_sink, clock),
+            execute_ping_run=ping_executor,
+            run_executors={"ping": ping_executor, INTAKE_KIND: intake_executor},
             access_codec=access_codec,
             token_service=token_service,
             register_user=RegisterUser(
@@ -183,6 +266,13 @@ class Container:
             update_project=UpdateProject(projects, clock),
             delete_project=DeleteProject(projects, audit, clock),
             restore_project=RestoreProject(projects, audit, clock),
+            llm=llm,
+            post_message=PostMessage(
+                threads, messages, run_repository, create_run, continue_run, clock
+            ),
+            list_messages=ListMessages(threads, messages),
+            get_requirements=GetRequirements(requirements),
+            confirm_requirements=ConfirmRequirements(requirements, audit),
             audit=audit,
         )
 

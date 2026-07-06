@@ -17,6 +17,7 @@ dependencies = [
     "argon2-cffi>=23.1",
     "pyjwt>=2.10",
     "email-validator>=2.2",
+    "google-genai>=1.0",
 ]
 
 [dependency-groups]
@@ -51,6 +52,10 @@ mypy_path = "src"
 packages = ["aisa"]
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["google.genai.*", "google.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -61,8 +66,10 @@ root_package = "aisa"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Feature modules are independent"
+name = "Core feature modules are independent"
 type = "independence"
+# These three are peers and must never import each other. `intake` is a
+# higher-level module that composes them, so it is deliberately not listed.
 modules = ["aisa.identity", "aisa.orchestration", "aisa.projects"]
 # Feature API routers may use the platform's HTTP-edge dependencies; the
 # composition root (container) is the one sanctioned meeting point, so the
@@ -73,16 +80,36 @@ ignore_imports = ["aisa.platform.api.deps -> aisa.platform.container"]
 name = "Shared kernel imports no feature modules"
 type = "forbidden"
 source_modules = ["aisa.shared"]
-forbidden_modules = ["aisa.identity", "aisa.orchestration", "aisa.projects", "aisa.platform"]
+forbidden_modules = [
+    "aisa.identity", "aisa.orchestration", "aisa.projects", "aisa.intake",
+    "aisa.llm", "aisa.platform",
+]
+
+[[tool.importlinter.contracts]]
+name = "LLM is a foundational module (imports no feature modules)"
+type = "forbidden"
+source_modules = ["aisa.llm"]
+forbidden_modules = [
+    "aisa.identity", "aisa.orchestration", "aisa.projects", "aisa.intake", "aisa.platform",
+]
 
 [[tool.importlinter.contracts]]
 name = "Module layering (api/infra -> application -> domain)"
 type = "layers"
 layers = ["api", "infrastructure", "application", "domain"]
-containers = ["aisa.orchestration", "aisa.identity", "aisa.projects"]
+containers = ["aisa.orchestration", "aisa.identity", "aisa.projects", "aisa.intake"]
+
+[[tool.importlinter.contracts]]
+name = "LLM layering (infra -> application -> domain)"
+type = "layers"
+layers = ["infrastructure", "application", "domain"]
+containers = ["aisa.llm"]
 
 [[tool.importlinter.contracts]]
 name = "Domain layers are framework-free"
 type = "forbidden"
-source_modules = ["aisa.orchestration.domain", "aisa.identity.domain", "aisa.projects.domain"]
+source_modules = [
+    "aisa.orchestration.domain", "aisa.identity.domain", "aisa.projects.domain",
+    "aisa.intake.domain", "aisa.llm.domain",
+]
 forbidden_modules = ["fastapi", "sqlalchemy", "redis", "alembic", "pydantic_settings"]

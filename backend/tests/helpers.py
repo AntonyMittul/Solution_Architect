@@ -3,7 +3,7 @@
 from typing import Any, cast
 
 from aisa.orchestration.application.use_cases import CreateRun, ExecutePingRun, GetRun
-from aisa.platform.container import Container
+from aisa.platform.container import KNOWN_RUN_KINDS, Container
 from aisa.shared.clock import Clock
 from aisa.shared.config import Settings
 from aisa.shared.ids import new_id
@@ -11,7 +11,7 @@ from tests.fakes import InlineJobQueue, InMemoryRunEvents, InMemoryRunRepository
 
 
 def make_walking_skeleton_container(clock: Clock) -> Container:
-    """Container with in-memory orchestration adapters; identity/projects
+    """Container with in-memory orchestration adapters; identity/projects/intake
     fields are unused by walking-skeleton tests and left unwired."""
     repo = InMemoryRunRepository()
     events = InMemoryRunEvents()
@@ -32,9 +32,10 @@ def make_walking_skeleton_container(clock: Clock) -> Container:
         job_queue=queue,
         run_event_sink=events,
         run_event_stream=events,
-        create_run=CreateRun(repo, queue, clock, new_id),
+        create_run=CreateRun(repo, queue, clock, new_id, KNOWN_RUN_KINDS),
         get_run=GetRun(repo),
         execute_ping_run=executor,
+        run_executors={"ping": executor},
         access_codec=unwired,
         token_service=unwired,
         register_user=unwired,
@@ -54,5 +55,10 @@ def make_walking_skeleton_container(clock: Clock) -> Container:
         update_project=unwired,
         delete_project=unwired,
         restore_project=unwired,
+        llm=unwired,
+        post_message=unwired,
+        list_messages=unwired,
+        get_requirements=unwired,
+        confirm_requirements=unwired,
         audit=unwired,
     )

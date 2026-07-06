@@ -64,6 +64,12 @@ class InMemoryRunRepository:
             raise NotFoundError(f"Run '{run.id}' not found")
         self._runs[run.id] = replace(run)
 
+    async def latest_for_project(self, project_id: str, kind: str) -> Run | None:
+        matches = [r for r in self._runs.values() if r.project_id == project_id and r.kind == kind]
+        if not matches:
+            return None
+        return replace(max(matches, key=lambda r: r.created_at))
+
 
 class RecordingJobQueue:
     """Records enqueued jobs without executing them."""

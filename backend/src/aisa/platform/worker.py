@@ -30,7 +30,12 @@ async def main() -> None:
     assert isinstance(queue, RedisStreamJobQueue)
 
     async def handle_run_execute(payload: dict[str, str]) -> None:
-        await container.execute_ping_run.execute(payload["run_id"])
+        # Dispatch by run kind to the registered executor (ping, intake, ...).
+        executor = container.run_executors.get(payload["kind"])
+        if executor is None:
+            logger.error("worker.no_executor", kind=payload.get("kind"))
+            return
+        await executor.execute(payload["run_id"])
 
     logger.info("worker.starting", consumer=consumer_name)
     try:

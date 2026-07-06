@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 30
     verification_token_ttl_hours: int = 48
 
+    # LLM. provider "gemini" needs a key; "fake" is a deterministic stub for
+    # local dev/tests without network or credentials.
+    llm_provider: str = "gemini"
+    gemini_api_key: str = ""
+    llm_model_quality: str = "gemini-3.1-flash-lite"
+    llm_model_fast: str = "gemini-3.1-flash-lite"
+    llm_max_output_tokens: int = 8192
+    intake_max_rounds: int = 3
+
     @property
     def is_dev(self) -> bool:
         return self.env == "dev"

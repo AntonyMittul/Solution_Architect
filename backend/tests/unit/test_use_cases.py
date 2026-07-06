@@ -6,6 +6,8 @@ from aisa.shared.clock import SystemClock
 from aisa.shared.errors import UnsupportedOperationError
 from tests.fakes import InMemoryRunEvents, InMemoryRunRepository, RecordingJobQueue
 
+KNOWN = frozenset({"ping"})
+
 
 def fixed_id() -> str:
     return "01TEST0000000000000000TEST"
@@ -14,18 +16,20 @@ def fixed_id() -> str:
 async def test_create_run_persists_and_enqueues() -> None:
     repo = InMemoryRunRepository()
     queue = RecordingJobQueue()
-    use_case = CreateRun(repo, queue, SystemClock(), fixed_id)
+    use_case = CreateRun(repo, queue, SystemClock(), fixed_id, KNOWN)
 
     run = await use_case.execute(kind="ping")
 
     assert run.status is RunStatus.QUEUED
     stored = await repo.get(run.id)
     assert stored.status is RunStatus.QUEUED
-    assert queue.jobs == [("run.execute", {"run_id": run.id})]
+    assert queue.jobs == [("run.execute", {"run_id": run.id, "kind": "ping"})]
 
 
 async def test_create_run_rejects_unknown_kind() -> None:
-    use_case = CreateRun(InMemoryRunRepository(), RecordingJobQueue(), SystemClock(), fixed_id)
+    use_case = CreateRun(
+        InMemoryRunRepository(), RecordingJobQueue(), SystemClock(), fixed_id, KNOWN
+    )
     with pytest.raises(UnsupportedOperationError):
         await use_case.execute(kind="teleport")
 
@@ -34,7 +38,9 @@ async def test_execute_ping_run_emits_ordered_events_and_completes() -> None:
     repo = InMemoryRunRepository()
     events = InMemoryRunEvents()
     clock = SystemClock()
-    created = await CreateRun(repo, RecordingJobQueue(), clock, fixed_id).execute(kind="ping")
+    created = await CreateRun(repo, RecordingJobQueue(), clock, fixed_id, KNOWN).execute(
+        kind="ping"
+    )
 
     await ExecutePingRun(repo, events, clock).execute(created.id)
 
@@ -51,7 +57,9 @@ async def test_execute_ping_run_is_idempotent_on_redelivery() -> None:
     repo = InMemoryRunRepository()
     events = InMemoryRunEvents()
     clock = SystemClock()
-    created = await CreateRun(repo, RecordingJobQueue(), clock, fixed_id).execute(kind="ping")
+    created = await CreateRun(repo, RecordingJobQueue(), clock, fixed_id, KNOWN).execute(
+        kind="ping"
+    )
     executor = ExecutePingRun(repo, events, clock)
 
     await executor.execute(created.id)

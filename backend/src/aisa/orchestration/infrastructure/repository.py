@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aisa.orchestration.domain.run import Run, RunStatus
@@ -34,12 +35,26 @@ class SqlAlchemyRunRepository:
             row.started_at = run.started_at
             row.finished_at = run.finished_at
 
+    async def latest_for_project(self, project_id: str, kind: str) -> Run | None:
+        async with self._session_factory() as session:
+            row = await session.scalar(
+                select(RunRow)
+                .where(RunRow.project_id == project_id, RunRow.kind == kind)
+                .order_by(RunRow.created_at.desc())
+                .limit(1)
+            )
+            return _to_domain(row) if row is not None else None
+
 
 def _to_row(run: Run) -> RunRow:
     return RunRow(
         id=run.id,
         kind=run.kind,
         status=run.status.value,
+        workspace_id=run.workspace_id,
+        project_id=run.project_id,
+        triggered_by=run.triggered_by,
+        input=dict(run.input),
         error=run.error,
         created_at=run.created_at,
         started_at=run.started_at,
@@ -52,6 +67,10 @@ def _to_domain(row: RunRow) -> Run:
         id=row.id,
         kind=row.kind,
         status=RunStatus(row.status),
+        workspace_id=row.workspace_id,
+        project_id=row.project_id,
+        triggered_by=row.triggered_by,
+        input=dict(row.input),
         error=row.error,
         created_at=row.created_at,
         started_at=row.started_at,

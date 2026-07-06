@@ -14,9 +14,21 @@ class RunRepository(Protocol):
 
     async def save(self, run: Run) -> None: ...
 
+    async def latest_for_project(self, project_id: str, kind: str) -> Run | None: ...
+
 
 class JobQueue(Protocol):
     async def enqueue(self, kind: str, payload: Mapping[str, str]) -> None: ...
+
+
+class RunExecutor(Protocol):
+    """Executes one run to its next resting state (terminal or needs_input).
+
+    Implementations must be idempotent on redelivery and resumable: calling
+    execute again on a needs_input run continues it; on a terminal run it is a
+    no-op."""
+
+    async def execute(self, run_id: str) -> None: ...
 
 
 @dataclass(frozen=True)

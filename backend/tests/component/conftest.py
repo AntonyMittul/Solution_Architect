@@ -9,7 +9,7 @@ import asyncio
 import os
 import subprocess
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import httpx
@@ -17,6 +17,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from aisa.llm.application.ports import LLMProvider
+from aisa.llm.infrastructure.fake import FakeLLMProvider
 from aisa.platform.app import create_app
 from aisa.platform.container import Container
 from aisa.shared.config import Settings
@@ -30,6 +32,7 @@ ADMIN_URL = f"postgresql+asyncpg://aisa:aisa@{PG_HOST}:{PG_PORT}/{TEST_DB}"
 APP_URL = f"postgresql+asyncpg://aisa_app:aisa_app@{PG_HOST}:{PG_PORT}/{TEST_DB}"
 
 ALL_TABLES = (
+    "llm_usage, requirement_docs, messages, threads, "
     "audit_log, projects, email_verification_tokens, refresh_tokens, "
     "agent_events, runs, memberships, workspaces, users"
 )
@@ -69,18 +72,36 @@ def test_database() -> str:
     return APP_URL
 
 
+ContainerFactory = Callable[[LLMProvider | None], Container]
+
+
 @pytest.fixture
-async def db_container(test_database: str) -> AsyncIterator[Container]:
+async def container_factory(test_database: str) -> AsyncIterator[ContainerFactory]:
     # Truncate as admin (bypasses RLS) so every test starts clean.
     admin_engine = create_async_engine(ADMIN_URL)
     async with admin_engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE {ALL_TABLES} CASCADE"))
     await admin_engine.dispose()
 
-    settings = Settings(database_url=test_database, redis_url="redis://localhost:6379/9")
-    container = Container.build(settings)
-    yield container
-    await container.aclose()
+    built: list[Container] = []
+
+    def make(llm_provider: LLMProvider | None = None) -> Container:
+        settings = Settings(
+            database_url=test_database, redis_url="redis://localhost:6379/9", llm_provider="fake"
+        )
+        provider = llm_provider or FakeLLMProvider(responses=["{}"])
+        container = Container.build(settings, llm_provider=provider)
+        built.append(container)
+        return container
+
+    yield make
+    for container in built:
+        await container.aclose()
+
+
+@pytest.fixture
+async def db_container(container_factory: ContainerFactory) -> Container:
+    return container_factory(None)
 
 
 @pytest.fixture

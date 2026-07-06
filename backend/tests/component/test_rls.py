@@ -23,7 +23,7 @@ async def seeded_engines(test_database: str) -> AsyncIterator[tuple[AsyncEngine,
     admin = create_async_engine(ADMIN_URL)
     app = create_async_engine(APP_URL)
     async with admin.begin() as conn:
-        await conn.execute(text("TRUNCATE audit_log, projects, workspaces CASCADE"))
+        await conn.execute(text("TRUNCATE requirement_docs, projects, workspaces CASCADE"))
         for ws, project in (("wsA", "projA"), ("wsB", "projB")):
             await conn.execute(
                 text(
@@ -40,6 +40,14 @@ async def seeded_engines(test_database: str) -> AsyncIterator[tuple[AsyncEngine,
                     " (:id, :ws, :name, 'active', '{}', 'u1', :now, :now)"
                 ),
                 {"id": project, "ws": ws, "name": project, "now": NOW},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO requirement_docs (id, workspace_id, project_id, version,"
+                    " status, content, created_by, created_at) VALUES"
+                    " (:id, :ws, :proj, 1, 'draft', '{}', 'agent', :now)"
+                ),
+                {"id": f"req{ws}", "ws": ws, "proj": project, "now": NOW},
             )
     yield admin, app
     await app.dispose()
@@ -87,6 +95,19 @@ async def test_rls_blocks_cross_tenant_insert(
                 ),
                 {"now": NOW},
             )
+
+
+async def test_rls_filters_requirement_docs_per_tenant(
+    seeded_engines: tuple[AsyncEngine, AsyncEngine],
+) -> None:
+    _, app = seeded_engines
+    for workspace_id, expected in (("wsA", ["reqwsA"]), ("wsB", ["reqwsB"])):
+        async with app.connect() as conn:
+            await conn.execute(
+                text("SELECT set_config('app.workspace_id', :ws, true)"), {"ws": workspace_id}
+            )
+            rows = await conn.execute(text("SELECT id FROM requirement_docs ORDER BY id"))
+            assert [row[0] for row in rows] == expected
 
 
 async def test_rls_makes_cross_tenant_update_a_noop(
