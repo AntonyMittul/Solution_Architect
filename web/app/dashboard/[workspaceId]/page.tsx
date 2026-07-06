@@ -138,12 +138,15 @@ export default function ProjectsPage() {
             key={project.id}
             className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/50 px-5 py-4"
           >
-            <div className="min-w-0">
+            <Link
+              href={`/dashboard/${workspaceId}/projects/${project.id}`}
+              className="min-w-0 flex-1 hover:opacity-80"
+            >
               <p className="truncate font-medium">{project.name}</p>
               {project.description && (
                 <p className="truncate text-sm text-slate-500">{project.description}</p>
               )}
-            </div>
+            </Link>
             <span className="ml-auto rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
               {project.status}
             </span>

@@ -59,6 +59,46 @@ export interface RegisterResponse {
   verification_token: string | null;
 }
 
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  why: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: { text?: string; questions?: ClarifyingQuestion[] };
+  run_id: string | null;
+  created_at: string;
+}
+
+export interface RequirementsContent {
+  schema_version: number;
+  summary: string;
+  goals: string[];
+  actors: string[];
+  functional_requirements: string[];
+  non_functional_requirements: string[];
+  constraints: string[];
+  assumptions: string[];
+  open_questions: string[];
+}
+
+export interface Requirements {
+  version: number;
+  status: "draft" | "confirmed";
+  content: RequirementsContent;
+  created_by: string;
+  created_at: string;
+}
+
+export interface PostMessageResult {
+  thread_id: string;
+  run_id: string;
+  resumed: boolean;
+}
+
 const WRITE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin", "member"]);
 const MANAGE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin"]);
 
