@@ -1,0 +1,70 @@
+"""In-memory port implementations for fast, infrastructure-free tests."""
+
+from collections import defaultdict
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from dataclasses import replace
+
+from aisa.orchestration.application.ports import RunEvent
+from aisa.orchestration.domain.run import Run
+from aisa.shared.errors import NotFoundError
+
+TERMINAL_EVENT_TYPES = frozenset({"run.completed", "run.failed", "run.cancelled"})
+
+
+class InMemoryRunRepository:
+    def __init__(self) -> None:
+        self._runs: dict[str, Run] = {}
+
+    async def add(self, run: Run) -> None:
+        self._runs[run.id] = replace(run)
+
+    async def get(self, run_id: str) -> Run:
+        if run_id not in self._runs:
+            raise NotFoundError(f"Run '{run_id}' not found")
+        return replace(self._runs[run_id])
+
+    async def save(self, run: Run) -> None:
+        if run.id not in self._runs:
+            raise NotFoundError(f"Run '{run.id}' not found")
+        self._runs[run.id] = replace(run)
+
+
+class RecordingJobQueue:
+    """Records enqueued jobs without executing them."""
+
+    def __init__(self) -> None:
+        self.jobs: list[tuple[str, dict[str, str]]] = []
+
+    async def enqueue(self, kind: str, payload: Mapping[str, str]) -> None:
+        self.jobs.append((kind, dict(payload)))
+
+
+class InlineJobQueue:
+    """Executes the handler immediately on enqueue — collapses api->worker for tests."""
+
+    def __init__(self) -> None:
+        self.handlers: dict[str, Callable[[dict[str, str]], Awaitable[None]]] = {}
+
+    async def enqueue(self, kind: str, payload: Mapping[str, str]) -> None:
+        await self.handlers[kind](dict(payload))
+
+
+class InMemoryRunEvents:
+    """Implements both RunEventSink and RunEventStream over a plain list."""
+
+    def __init__(self) -> None:
+        self._events: dict[str, list[RunEvent]] = defaultdict(list)
+
+    async def emit(self, run_id: str, event_type: str, payload: dict[str, object]) -> RunEvent:
+        seq = len(self._events[run_id]) + 1
+        event = RunEvent(run_id=run_id, seq=seq, type=event_type, payload=payload)
+        self._events[run_id].append(event)
+        return event
+
+    async def stream(self, run_id: str, after_seq: int) -> AsyncIterator[RunEvent | None]:
+        for event in list(self._events[run_id]):
+            if event.seq <= after_seq:
+                continue
+            yield event
+            if event.type in TERMINAL_EVENT_TYPES:
+                return

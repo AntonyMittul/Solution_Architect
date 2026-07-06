@@ -7,7 +7,33 @@ technologies, estimates cloud costs, produces API specifications and database sc
 documentation, and can optionally provision repositories or infrastructure through the
 Model Context Protocol (MCP).
 
-**Status:** Planning phase. No application code yet — architecture must be finalized first.
+**Status:** Building — roadmap milestone **M0 (Foundations)**. The walking skeleton is live:
+a request flows web → api → job queue → worker → event log → SSE → web, end to end.
+
+## Repository Layout
+
+```
+backend/   FastAPI + worker (one codebase, two processes) — src/aisa/<module>/{domain,application,infrastructure,api}
+web/       Next.js (App Router) + Tailwind
+docs/      Architecture & planning documents (see index below)
+.github/   CI (lint, strict type checks, architecture contracts, tests, migrations, compose smoke)
+```
+
+## Local Development
+
+Prereqs: Docker, Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node 22+.
+
+```bash
+docker compose up -d postgres redis          # infrastructure
+cd backend && uv sync && uv run alembic upgrade head
+uv run uvicorn aisa.platform.app:app --reload --port 8000   # terminal 1: api
+uv run python -m aisa.platform.worker                        # terminal 2: worker
+cd ../web && npm install && npm run dev                      # terminal 3: web -> http://localhost:3000
+```
+
+Quality gates (same as CI): `cd backend && uv run ruff check . && uv run mypy && uv run lint-imports && uv run pytest`
+End-to-end smoke test: `cd backend && uv run python scripts/smoke.py`
+Full stack in containers: `docker compose up --build`
 
 ## Documentation Index
 
