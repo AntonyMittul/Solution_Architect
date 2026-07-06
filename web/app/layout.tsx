@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
   title: "AI Solution Architect",
@@ -10,15 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased">
-        <header className="border-b border-slate-800 px-6 py-4">
-          <h1 className="text-lg font-semibold tracking-tight">
-            AI Solution Architect
-            <span className="ml-3 rounded bg-slate-800 px-2 py-0.5 text-xs font-normal text-slate-400">
-              M0 walking skeleton
-            </span>
-          </h1>
-        </header>
-        <main className="mx-auto max-w-3xl px-6 py-10">{children}</main>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
