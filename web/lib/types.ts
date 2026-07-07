@@ -192,3 +192,49 @@ const MANAGE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin"]);
 
 export const canWriteProjects = (role: Role): boolean => WRITE_ROLES.has(role);
 export const canManageMembers = (role: Role): boolean => MANAGE_ROLES.has(role);
+export const canManageWorkspace = (role: Role): boolean => MANAGE_ROLES.has(role);
+
+// ----- MCP integrations -----
+
+export type McpTransport = "streamable_http" | "stdio";
+export type McpTrust = "untrusted" | "trusted_read";
+export type McpServerStatus = "active" | "disabled";
+
+export interface McpServer {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  endpoint: string;
+  trust: McpTrust;
+  tool_allowlist: string[];
+  status: McpServerStatus;
+  created_at: string;
+}
+
+export interface ToolDescriptor {
+  name: string;
+  description: string;
+}
+
+export type PlanStatus = "proposed" | "rejected" | "executed" | "failed";
+export type InvocationStatus = "proposed" | "succeeded" | "failed" | "skipped";
+
+export interface ToolInvocation {
+  id: string;
+  server_id: string;
+  tool_name: string;
+  arguments: Record<string, string>;
+  rationale: string;
+  status: InvocationStatus;
+  result: Record<string, unknown> | null;
+}
+
+export interface ProvisioningPlan {
+  id: string;
+  project_id: string;
+  goal: string;
+  summary: string;
+  status: PlanStatus;
+  created_at: string;
+  invocations: ToolInvocation[];
+}

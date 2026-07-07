@@ -76,9 +76,17 @@ function TopBar({ userEmail }: { userEmail: string }) {
 
         <div className="ml-auto flex items-center gap-4 text-sm text-slate-400">
           {params.workspaceId && (
-            <Link href={`/dashboard/${params.workspaceId}/usage`} className="hover:text-slate-200">
-              Usage
-            </Link>
+            <>
+              <Link href={`/dashboard/${params.workspaceId}/mcp`} className="hover:text-slate-200">
+                MCP
+              </Link>
+              <Link
+                href={`/dashboard/${params.workspaceId}/usage`}
+                className="hover:text-slate-200"
+              >
+                Usage
+              </Link>
+            </>
           )}
           <Link href="/playground" className="hover:text-slate-200">
             Playground

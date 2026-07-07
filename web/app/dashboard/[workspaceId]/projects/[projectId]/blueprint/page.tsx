@@ -105,12 +105,20 @@ export default function BlueprintPage() {
 
   return (
     <div className="space-y-5">
-      <Link
-        href={`/dashboard/${workspaceId}/projects/${projectId}`}
-        className="text-sm text-slate-400 hover:text-slate-200"
-      >
-        ← Requirements
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/dashboard/${workspaceId}/projects/${projectId}`}
+          className="text-sm text-slate-400 hover:text-slate-200"
+        >
+          ← Requirements
+        </Link>
+        <Link
+          href={`/dashboard/${workspaceId}/projects/${projectId}/provision`}
+          className="text-sm text-slate-400 hover:text-slate-200"
+        >
+          Provision →
+        </Link>
+      </div>
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold tracking-tight">Blueprint</h2>
