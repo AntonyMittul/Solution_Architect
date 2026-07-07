@@ -20,6 +20,8 @@ dependencies = [
     "google-genai>=1.0",
     "langgraph>=0.2.60",
     "sqlglot>=25.0",
+    "opentelemetry-api>=1.29",
+    "opentelemetry-sdk>=1.29",
 ]
 
 [dependency-groups]
@@ -55,7 +57,7 @@ packages = ["aisa"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["google.genai.*", "google.*"]
+module = ["google.genai.*", "google.*", "opentelemetry.exporter.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

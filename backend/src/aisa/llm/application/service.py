@@ -7,8 +7,10 @@ from pydantic import BaseModel, ValidationError
 from aisa.llm.application.ports import LLMProvider, RunTokenMeter, UsageRecorder
 from aisa.llm.domain.messages import LLMMessage, MessageRole, ModelTier
 from aisa.shared.errors import AppError, BudgetExceededError
+from aisa.shared.telemetry import get_tracer
 
 logger = structlog.get_logger(__name__)
+_tracer = get_tracer("aisa.llm")
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -65,36 +67,45 @@ class StructuredLLM:
         conversation = list(messages)
         last_error: ValidationError | None = None
 
-        for attempt in range(self._max_validation_retries + 1):
-            completion = await self._provider.generate(
-                system=system, messages=conversation, response_model=schema, tier=tier
-            )
-            await self._usage_recorder.record(
-                completion.usage, workspace_id=ctx.workspace_id, run_id=ctx.run_id
-            )
-            await self._enforce_budget(
-                ctx, completion.usage.input_tokens + completion.usage.output_tokens
-            )
-            try:
-                return schema.model_validate_json(completion.text)
-            except ValidationError as exc:
-                last_error = exc
-                logger.warning(
-                    "llm.validation_retry",
-                    attempt=attempt,
-                    run_id=ctx.run_id,
-                    error_count=exc.error_count(),
+        with _tracer.start_as_current_span("llm.complete") as span:
+            span.set_attribute("aisa.schema", schema.__name__)
+            if ctx.run_id:
+                span.set_attribute("aisa.run_id", ctx.run_id)
+
+            for attempt in range(self._max_validation_retries + 1):
+                completion = await self._provider.generate(
+                    system=system, messages=conversation, response_model=schema, tier=tier
                 )
-                conversation = [
-                    *conversation,
-                    LLMMessage(MessageRole.ASSISTANT, completion.text),
-                    LLMMessage(
-                        MessageRole.USER,
-                        f"Your previous reply did not match the required schema "
-                        f"({exc.error_count()} errors). Return ONLY valid JSON matching "
-                        f"the schema. Details: {exc}",
-                    ),
-                ]
+                span.set_attribute("gen_ai.response.model", completion.usage.model)
+                span.set_attribute("gen_ai.usage.input_tokens", completion.usage.input_tokens)
+                span.set_attribute("gen_ai.usage.output_tokens", completion.usage.output_tokens)
+                span.set_attribute("aisa.llm_attempts", attempt + 1)
+                await self._usage_recorder.record(
+                    completion.usage, workspace_id=ctx.workspace_id, run_id=ctx.run_id
+                )
+                await self._enforce_budget(
+                    ctx, completion.usage.input_tokens + completion.usage.output_tokens
+                )
+                try:
+                    return schema.model_validate_json(completion.text)
+                except ValidationError as exc:
+                    last_error = exc
+                    logger.warning(
+                        "llm.validation_retry",
+                        attempt=attempt,
+                        run_id=ctx.run_id,
+                        error_count=exc.error_count(),
+                    )
+                    conversation = [
+                        *conversation,
+                        LLMMessage(MessageRole.ASSISTANT, completion.text),
+                        LLMMessage(
+                            MessageRole.USER,
+                            f"Your previous reply did not match the required schema "
+                            f"({exc.error_count()} errors). Return ONLY valid JSON matching "
+                            f"the schema. Details: {exc}",
+                        ),
+                    ]
 
         raise LLMError(f"Model output failed schema validation after retries: {last_error}")
 

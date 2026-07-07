@@ -4,10 +4,12 @@ import time
 import structlog
 
 from aisa.shared.ids import new_id
+from aisa.shared.telemetry import current_trace_id, get_tracer
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 
 logger = structlog.get_logger("aisa.access")
+_tracer = get_tracer("aisa.http")
 
 # Pure ASGI middleware (not BaseHTTPMiddleware) so SSE streaming is untouched.
 
@@ -23,7 +25,6 @@ class RequestContextMiddleware:
 
         request_id = new_id()
         request_id_var.set(request_id)
-        structlog.contextvars.bind_contextvars(request_id=request_id)
         start = time.perf_counter()
         status_holder = {"status": 0}
 
@@ -34,15 +35,24 @@ class RequestContextMiddleware:
                 headers.append((b"x-request-id", request_id.encode()))
             await send(message)
 
-        try:
-            await self.app(scope, receive, send_wrapper)
-        finally:
-            duration_ms = round((time.perf_counter() - start) * 1000, 1)
-            logger.info(
-                "http.request",
-                method=scope["method"],
-                path=scope["path"],
-                status=status_holder["status"],
-                duration_ms=duration_ms,
+        with _tracer.start_as_current_span(
+            "http.request",
+            attributes={"http.request.method": scope["method"], "url.path": scope["path"]},
+        ) as span:
+            # trace_id correlates logs with the trace; request_id is the app id.
+            structlog.contextvars.bind_contextvars(
+                request_id=request_id, trace_id=current_trace_id() or "-"
             )
-            structlog.contextvars.unbind_contextvars("request_id")
+            try:
+                await self.app(scope, receive, send_wrapper)
+            finally:
+                duration_ms = round((time.perf_counter() - start) * 1000, 1)
+                span.set_attribute("http.response.status_code", status_holder["status"])
+                logger.info(
+                    "http.request",
+                    method=scope["method"],
+                    path=scope["path"],
+                    status=status_holder["status"],
+                    duration_ms=duration_ms,
+                )
+                structlog.contextvars.unbind_contextvars("request_id", "trace_id")

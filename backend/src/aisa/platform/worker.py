@@ -10,13 +10,16 @@ from aisa.orchestration.infrastructure.redis_queue import RedisStreamJobQueue
 from aisa.platform.container import Container
 from aisa.shared.config import Settings
 from aisa.shared.logging import configure_logging
+from aisa.shared.telemetry import configure_tracing, get_tracer
 
 logger = structlog.get_logger(__name__)
+_tracer = get_tracer("aisa.worker")
 
 
 async def main() -> None:
     settings = Settings()
     configure_logging(settings.log_level, json_logs=not settings.is_dev)
+    configure_tracing(settings, "aisa-worker")
     container = Container.build(settings)
     stop = asyncio.Event()
 
@@ -35,7 +38,11 @@ async def main() -> None:
         if executor is None:
             logger.error("worker.no_executor", kind=payload.get("kind"))
             return
-        await executor.execute(payload["run_id"])
+        with _tracer.start_as_current_span(
+            "run.execute",
+            attributes={"aisa.run_kind": payload["kind"], "aisa.run_id": payload["run_id"]},
+        ):
+            await executor.execute(payload["run_id"])
 
     logger.info("worker.starting", consumer=consumer_name)
     try:

@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     pro_run_token_budget: int = 2_000_000
     llm_price_per_1m_tokens: float = 0.30
 
+    # Observability (doc 14). Off by default; spans are no-ops until enabled.
+    otel_enabled: bool = False
+    otel_endpoint: str = ""  # OTLP/HTTP endpoint; needs opentelemetry-exporter-otlp-proto-http
+    otel_sample_ratio: float = 1.0
+
     @property
     def is_dev(self) -> bool:
         return self.env == "dev"
