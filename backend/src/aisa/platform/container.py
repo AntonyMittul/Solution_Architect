@@ -63,6 +63,9 @@ from aisa.llm.application.service import StructuredLLM
 from aisa.llm.domain.messages import ModelTier
 from aisa.llm.infrastructure.fake import FakeLLMProvider
 from aisa.llm.infrastructure.usage import SqlUsageRecorder
+from aisa.metering.application.service import RunGuard, UsageService
+from aisa.metering.domain.plan import Plan, PlanCatalog, PlanLimits
+from aisa.metering.infrastructure.usage_store import SqlUsageStore
 from aisa.orchestration.application.ports import (
     JobQueue,
     RunEventSink,
@@ -181,6 +184,9 @@ class Container:
     list_artifact_versions: ListArtifactVersions
     build_project_export: BuildProjectExport
 
+    # metering
+    usage_service: UsageService
+
     audit: AuditLogger = field(kw_only=True)
 
     @classmethod
@@ -221,6 +227,31 @@ class Container:
 
         # projects
         projects = SqlProjectRepository(session_factory)
+
+        # metering (plans + quota guard + usage)
+        plan_catalog = PlanCatalog(
+            {
+                Plan.FREE.value: PlanLimits(
+                    settings.free_monthly_run_quota, settings.free_run_token_budget
+                ),
+                Plan.PRO.value: PlanLimits(
+                    settings.pro_monthly_run_quota, settings.pro_run_token_budget
+                ),
+                Plan.TEAM.value: PlanLimits(
+                    settings.pro_monthly_run_quota, settings.pro_run_token_budget
+                ),
+            },
+            default=PlanLimits(settings.free_monthly_run_quota, settings.free_run_token_budget),
+        )
+        run_guard = RunGuard(workspaces, run_repository, plan_catalog, clock)
+        usage_service = UsageService(
+            workspaces,
+            run_repository,
+            SqlUsageStore(session_factory),
+            plan_catalog,
+            clock,
+            settings.llm_price_per_1m_tokens,
+        )
 
         # llm + intake
         provider = llm_provider or _build_llm_provider(settings)
@@ -313,16 +344,17 @@ class Container:
             restore_project=RestoreProject(projects, audit, clock),
             llm=llm,
             post_message=PostMessage(
-                threads, messages, run_repository, create_run, continue_run, clock
+                threads, messages, run_repository, create_run, continue_run, run_guard, clock
             ),
             list_messages=ListMessages(threads, messages),
             get_requirements=GetRequirements(requirements),
             confirm_requirements=ConfirmRequirements(requirements, audit),
-            create_blueprint_run=CreateBlueprintRun(requirements, create_run),
+            create_blueprint_run=CreateBlueprintRun(requirements, create_run, run_guard),
             list_artifacts=ListArtifacts(artifacts),
             get_artifact=GetArtifact(artifacts),
             list_artifact_versions=ListArtifactVersions(artifacts),
             build_project_export=BuildProjectExport(artifacts, requirements, projects),
+            usage_service=usage_service,
             audit=audit,
         )
 

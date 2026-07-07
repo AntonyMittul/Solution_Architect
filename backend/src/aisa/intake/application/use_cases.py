@@ -7,6 +7,7 @@ from aisa.intake.application.ports import (
     ThreadRepository,
 )
 from aisa.intake.domain.models import Message, RequirementDoc, ThreadRole
+from aisa.metering.application.service import RunGuard
 from aisa.orchestration.application.ports import RunRepository
 from aisa.orchestration.application.use_cases import CreateRun, EnqueueRunContinuation
 from aisa.shared.audit import AuditEntry, AuditLogger
@@ -35,6 +36,7 @@ class PostMessage:
         runs: RunRepository,
         create_run: CreateRun,
         continue_run: EnqueueRunContinuation,
+        run_guard: RunGuard,
         clock: Clock,
     ) -> None:
         self._threads = threads
@@ -42,6 +44,7 @@ class PostMessage:
         self._runs = runs
         self._create_run = create_run
         self._continue_run = continue_run
+        self._run_guard = run_guard
         self._clock = clock
 
     async def execute(self, actor: Actor, project_id: str, text: str) -> PostMessageResult:
@@ -50,6 +53,12 @@ class PostMessage:
             raise ForbiddenError("Verify your email address before starting a design")
         if not text.strip():
             raise NotFoundError("Message text must not be empty")
+
+        # Resume doesn't consume quota; a new run does — check before storing.
+        active = await self._runs.latest_for_project(project_id, INTAKE_KIND)
+        resume = active is not None and active.awaiting_input
+        if not resume:
+            await self._run_guard.check(actor.workspace_id)
 
         thread = await self._threads.ensure_for_project(actor.workspace_id, project_id)
         await self._messages.append(
@@ -61,8 +70,8 @@ class PostMessage:
             now=self._clock.now(),
         )
 
-        active = await self._runs.latest_for_project(project_id, INTAKE_KIND)
-        if active is not None and active.awaiting_input:
+        if resume:
+            assert active is not None
             await self._continue_run.execute(active.id)
             return PostMessageResult(thread_id=thread.id, run_id=active.id, resumed=True)
 

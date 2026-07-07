@@ -50,3 +50,9 @@ class DomainValidationError(AppError):
     code = "invalid_input"
     title = "Invalid input"
     status = 400
+
+
+class QuotaExceededError(AppError):
+    code = "quota_exceeded"
+    title = "Plan quota exceeded"
+    status = 429

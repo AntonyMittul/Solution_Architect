@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = 8192
     intake_max_rounds: int = 3
 
+    # Plan limits + cost estimation for metering (doc 03 NFR-4).
+    free_monthly_run_quota: int = 50
+    pro_monthly_run_quota: int = 1000
+    free_run_token_budget: int = 500_000
+    pro_run_token_budget: int = 2_000_000
+    llm_price_per_1m_tokens: float = 0.30
+
     @property
     def is_dev(self) -> bool:
         return self.env == "dev"

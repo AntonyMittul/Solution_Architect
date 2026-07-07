@@ -73,7 +73,7 @@ def test_database() -> str:
     return APP_URL
 
 
-ContainerFactory = Callable[[LLMProvider | None], Container]
+ContainerFactory = Callable[..., Container]
 
 
 @pytest.fixture
@@ -86,9 +86,12 @@ async def container_factory(test_database: str) -> AsyncIterator[ContainerFactor
 
     built: list[Container] = []
 
-    def make(llm_provider: LLMProvider | None = None) -> Container:
+    def make(llm_provider: LLMProvider | None = None, **settings_overrides: object) -> Container:
         settings = Settings(
-            database_url=test_database, redis_url="redis://localhost:6379/9", llm_provider="fake"
+            database_url=test_database,
+            redis_url="redis://localhost:6379/9",
+            llm_provider="fake",
+            **settings_overrides,
         )
         provider = llm_provider or FakeLLMProvider(responses=["{}"])
         container = Container.build(settings, llm_provider=provider)

@@ -1,6 +1,7 @@
 from collections.abc import Callable
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aisa.orchestration.domain.run import Run, RunStatus
@@ -44,6 +45,15 @@ class SqlAlchemyRunRepository:
                 .limit(1)
             )
             return _to_domain(row) if row is not None else None
+
+    async def count_since(self, workspace_id: str, since: datetime) -> int:
+        async with self._session_factory() as session:
+            count = await session.scalar(
+                select(func.count())
+                .select_from(RunRow)
+                .where(RunRow.workspace_id == workspace_id, RunRow.created_at >= since)
+            )
+            return int(count or 0)
 
 
 def _to_row(run: Run) -> RunRow:

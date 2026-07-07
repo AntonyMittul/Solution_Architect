@@ -175,6 +175,18 @@ export interface DesignDocContent {
   markdown: string;
 }
 
+export interface Usage {
+  plan: string;
+  period_start: string;
+  runs_this_month: number;
+  monthly_run_quota: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  per_run_token_budget: number;
+}
+
 const WRITE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin", "member"]);
 const MANAGE_ROLES: ReadonlySet<Role> = new Set<Role>(["owner", "admin"]);
 

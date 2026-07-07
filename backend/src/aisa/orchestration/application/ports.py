@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from aisa.orchestration.domain.run import Run
@@ -15,6 +16,8 @@ class RunRepository(Protocol):
     async def save(self, run: Run) -> None: ...
 
     async def latest_for_project(self, project_id: str, kind: str) -> Run | None: ...
+
+    async def count_since(self, workspace_id: str, since: datetime) -> int: ...
 
 
 class JobQueue(Protocol):

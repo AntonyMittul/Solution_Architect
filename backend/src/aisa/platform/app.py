@@ -9,6 +9,7 @@ from aisa.exports.api.router import router as exports_router
 from aisa.identity.api.auth_router import router as auth_router
 from aisa.identity.api.workspace_router import router as workspace_router
 from aisa.intake.api.router import router as intake_router
+from aisa.metering.api.router import router as metering_router
 from aisa.orchestration.api.router import router as runs_router
 from aisa.platform.api.health import router as health_router
 from aisa.platform.container import Container
@@ -50,6 +51,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(blueprint_router)
     app.include_router(artifacts_router)
     app.include_router(exports_router)
+    app.include_router(metering_router)
     app.include_router(runs_router)
     return app
 

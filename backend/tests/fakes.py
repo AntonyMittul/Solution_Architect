@@ -70,6 +70,13 @@ class InMemoryRunRepository:
             return None
         return replace(max(matches, key=lambda r: r.created_at))
 
+    async def count_since(self, workspace_id: str, since: datetime) -> int:
+        return sum(
+            1
+            for r in self._runs.values()
+            if r.workspace_id == workspace_id and r.created_at >= since
+        )
+
 
 class RecordingJobQueue:
     """Records enqueued jobs without executing them."""
