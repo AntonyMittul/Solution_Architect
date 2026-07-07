@@ -101,7 +101,7 @@ type = "layers"
 layers = ["api", "infrastructure", "application", "domain"]
 containers = [
     "aisa.orchestration", "aisa.identity", "aisa.projects", "aisa.intake", "aisa.artifacts",
-    "aisa.metering",
+    "aisa.metering", "aisa.integrations",
 ]
 
 [[tool.importlinter.contracts]]
@@ -122,6 +122,6 @@ type = "forbidden"
 source_modules = [
     "aisa.orchestration.domain", "aisa.identity.domain", "aisa.projects.domain",
     "aisa.intake.domain", "aisa.llm.domain", "aisa.artifacts.domain", "aisa.blueprint.domain",
-    "aisa.exports.domain", "aisa.metering.domain",
+    "aisa.exports.domain", "aisa.metering.domain", "aisa.integrations.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "redis", "alembic", "pydantic_settings"]

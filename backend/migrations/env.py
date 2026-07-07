@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import aisa.artifacts.infrastructure.tables
 import aisa.identity.infrastructure.tables
 import aisa.intake.infrastructure.tables
+import aisa.integrations.infrastructure.tables
 import aisa.llm.infrastructure.usage
 import aisa.orchestration.infrastructure.tables
 import aisa.projects.infrastructure.tables
@@ -21,6 +22,7 @@ _ = (
     aisa.orchestration.infrastructure.tables,
     aisa.projects.infrastructure.tables,
     aisa.intake.infrastructure.tables,
+    aisa.integrations.infrastructure.tables,
     aisa.llm.infrastructure.usage,
     aisa.artifacts.infrastructure.tables,
 )

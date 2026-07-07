@@ -58,6 +58,25 @@ from aisa.intake.infrastructure.repositories import (
     SqlRequirementRepository,
     SqlThreadRepository,
 )
+from aisa.integrations.application.agent import Provisioner
+from aisa.integrations.application.governor import ToolGovernor
+from aisa.integrations.application.use_cases import (
+    ApproveProvisioningPlan,
+    CreateProvisioningPlan,
+    DeleteMcpServer,
+    DiscoverServerTools,
+    GetProvisioningPlan,
+    ListMcpServers,
+    ListProvisioningPlans,
+    RegisterMcpServer,
+    RejectProvisioningPlan,
+    UpdateMcpServer,
+)
+from aisa.integrations.infrastructure.fake_client import FakeMcpClient
+from aisa.integrations.infrastructure.repositories import (
+    SqlMcpServerRepository,
+    SqlProvisioningRepository,
+)
 from aisa.llm.application.ports import LLMProvider, UsageRecorder
 from aisa.llm.application.service import StructuredLLM
 from aisa.llm.domain.messages import ModelTier
@@ -188,6 +207,18 @@ class Container:
     # metering
     usage_service: UsageService
 
+    # integrations (MCP)
+    list_mcp_servers: ListMcpServers
+    register_mcp_server: RegisterMcpServer
+    update_mcp_server: UpdateMcpServer
+    delete_mcp_server: DeleteMcpServer
+    discover_server_tools: DiscoverServerTools
+    create_provisioning_plan: CreateProvisioningPlan
+    list_provisioning_plans: ListProvisioningPlans
+    get_provisioning_plan: GetProvisioningPlan
+    approve_provisioning_plan: ApproveProvisioningPlan
+    reject_provisioning_plan: RejectProvisioningPlan
+
     audit: AuditLogger = field(kw_only=True)
 
     @classmethod
@@ -245,6 +276,13 @@ class Container:
             default=PlanLimits(settings.free_monthly_run_quota, settings.free_run_token_budget),
         )
         run_guard = RunGuard(workspaces, run_repository, plan_catalog, clock)
+
+        # integrations (MCP): fake client for now; a real streamable-HTTP
+        # adapter (mcp SDK) is a drop-in replacement behind the McpClient port.
+        mcp_servers = SqlMcpServerRepository(session_factory)
+        provisioning = SqlProvisioningRepository(session_factory)
+        mcp_client = FakeMcpClient()
+        governor = ToolGovernor()
         usage_service = UsageService(
             workspaces,
             run_repository,
@@ -258,6 +296,7 @@ class Container:
         provider = llm_provider or _build_llm_provider(settings)
         usage_recorder: UsageRecorder = SqlUsageRecorder(session_factory, clock)
         llm = StructuredLLM(provider, usage_recorder, token_meter=RedisRunTokenMeter(redis))
+        provisioner = Provisioner(llm)
         threads = SqlThreadRepository(session_factory, clock)
         messages = SqlMessageRepository(session_factory)
         requirements = SqlRequirementRepository(session_factory)
@@ -356,6 +395,20 @@ class Container:
             list_artifact_versions=ListArtifactVersions(artifacts),
             build_project_export=BuildProjectExport(artifacts, requirements, projects),
             usage_service=usage_service,
+            list_mcp_servers=ListMcpServers(mcp_servers),
+            register_mcp_server=RegisterMcpServer(mcp_servers, audit, clock, new_id),
+            update_mcp_server=UpdateMcpServer(mcp_servers, audit),
+            delete_mcp_server=DeleteMcpServer(mcp_servers, audit),
+            discover_server_tools=DiscoverServerTools(mcp_servers, mcp_client),
+            create_provisioning_plan=CreateProvisioningPlan(
+                mcp_servers, provisioning, mcp_client, provisioner, governor, clock, new_id
+            ),
+            list_provisioning_plans=ListProvisioningPlans(provisioning),
+            get_provisioning_plan=GetProvisioningPlan(provisioning),
+            approve_provisioning_plan=ApproveProvisioningPlan(
+                mcp_servers, provisioning, mcp_client, governor, audit
+            ),
+            reject_provisioning_plan=RejectProvisioningPlan(provisioning, audit),
             audit=audit,
         )
 
