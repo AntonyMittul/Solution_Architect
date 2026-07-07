@@ -28,11 +28,12 @@ class CreateBlueprintRun:
         if requirements is None or requirements.status is not RequirementStatus.CONFIRMED:
             raise InvalidStateError("Confirm the requirements before generating a blueprint")
 
-        await self._run_guard.check(actor.workspace_id)
+        limits = await self._run_guard.check(actor.workspace_id)
         return await self._create_run.execute(
             BLUEPRINT_KIND,
             workspace_id=actor.workspace_id,
             project_id=project_id,
             triggered_by=actor.user_id,
             input={"requirements_version": requirements.version},
+            token_budget=limits.per_run_token_budget,
         )

@@ -81,7 +81,11 @@ class IntakeExecutor:
                 project_settings=project.settings,
                 round_index=round_index,
                 max_rounds=self._max_rounds,
-                ctx=LLMContext(workspace_id=workspace_id, run_id=run_id),
+                ctx=LLMContext(
+                    workspace_id=workspace_id,
+                    run_id=run_id,
+                    token_budget=run.token_budget or None,
+                ),
             )
 
             requirement = await self._requirements.append_version(

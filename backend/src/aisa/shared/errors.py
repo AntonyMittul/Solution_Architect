@@ -56,3 +56,9 @@ class QuotaExceededError(AppError):
     code = "quota_exceeded"
     title = "Plan quota exceeded"
     status = 429
+
+
+class BudgetExceededError(AppError):
+    code = "budget_exceeded"
+    title = "Run token budget exceeded"
+    status = 402

@@ -79,7 +79,10 @@ class BlueprintExecutor:
                 await self._events.emit(run_id, event_type, payload)
 
             graph = build_blueprint_graph(
-                self._agents, emit, LLMContext(workspace_id, run_id), self._max_repairs
+                self._agents,
+                emit,
+                LLMContext(workspace_id, run_id, token_budget=run.token_budget or None),
+                self._max_repairs,
             )
             final: dict[str, Any] = await graph.ainvoke(
                 {

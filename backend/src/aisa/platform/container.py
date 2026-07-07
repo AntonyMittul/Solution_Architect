@@ -62,6 +62,7 @@ from aisa.llm.application.ports import LLMProvider, UsageRecorder
 from aisa.llm.application.service import StructuredLLM
 from aisa.llm.domain.messages import ModelTier
 from aisa.llm.infrastructure.fake import FakeLLMProvider
+from aisa.llm.infrastructure.meter import RedisRunTokenMeter
 from aisa.llm.infrastructure.usage import SqlUsageRecorder
 from aisa.metering.application.service import RunGuard, UsageService
 from aisa.metering.domain.plan import Plan, PlanCatalog, PlanLimits
@@ -256,7 +257,7 @@ class Container:
         # llm + intake
         provider = llm_provider or _build_llm_provider(settings)
         usage_recorder: UsageRecorder = SqlUsageRecorder(session_factory, clock)
-        llm = StructuredLLM(provider, usage_recorder)
+        llm = StructuredLLM(provider, usage_recorder, token_meter=RedisRunTokenMeter(redis))
         threads = SqlThreadRepository(session_factory, clock)
         messages = SqlMessageRepository(session_factory)
         requirements = SqlRequirementRepository(session_factory)

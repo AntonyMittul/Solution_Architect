@@ -4,9 +4,9 @@ from typing import TypeVar
 import structlog
 from pydantic import BaseModel, ValidationError
 
-from aisa.llm.application.ports import LLMProvider, UsageRecorder
+from aisa.llm.application.ports import LLMProvider, RunTokenMeter, UsageRecorder
 from aisa.llm.domain.messages import LLMMessage, MessageRole, ModelTier
-from aisa.shared.errors import AppError
+from aisa.shared.errors import AppError, BudgetExceededError
 
 logger = structlog.get_logger(__name__)
 
@@ -23,6 +23,14 @@ class LLMError(AppError):
 class LLMContext:
     workspace_id: str | None = None
     run_id: str | None = None
+    token_budget: int | None = None  # None or 0 => unlimited
+
+
+class _NoBudgetMeter:
+    """Default meter: never enforces a budget (used when none is wired)."""
+
+    async def add(self, run_id: str, tokens: int) -> int:
+        return 0
 
 
 class StructuredLLM:
@@ -30,17 +38,20 @@ class StructuredLLM:
 
     Calls the provider, validates the JSON against a Pydantic schema, and on
     validation failure feeds the error back to the model and retries. Token
-    usage is recorded for every attempt (billed regardless of validity)."""
+    usage is recorded for every attempt (billed regardless of validity), and a
+    per-run token budget is enforced when the context carries one."""
 
     def __init__(
         self,
         provider: LLMProvider,
         usage_recorder: UsageRecorder,
         max_validation_retries: int = 2,
+        token_meter: RunTokenMeter | None = None,
     ) -> None:
         self._provider = provider
         self._usage_recorder = usage_recorder
         self._max_validation_retries = max_validation_retries
+        self._token_meter: RunTokenMeter = token_meter or _NoBudgetMeter()
 
     async def complete(
         self,
@@ -60,6 +71,9 @@ class StructuredLLM:
             )
             await self._usage_recorder.record(
                 completion.usage, workspace_id=ctx.workspace_id, run_id=ctx.run_id
+            )
+            await self._enforce_budget(
+                ctx, completion.usage.input_tokens + completion.usage.output_tokens
             )
             try:
                 return schema.model_validate_json(completion.text)
@@ -83,3 +97,15 @@ class StructuredLLM:
                 ]
 
         raise LLMError(f"Model output failed schema validation after retries: {last_error}")
+
+    async def _enforce_budget(self, ctx: LLMContext, tokens: int) -> None:
+        if not ctx.token_budget or ctx.run_id is None:
+            return
+        total = await self._token_meter.add(ctx.run_id, tokens)
+        if total > ctx.token_budget:
+            logger.warning(
+                "llm.budget_exceeded", run_id=ctx.run_id, total=total, budget=ctx.token_budget
+            )
+            raise BudgetExceededError(
+                f"Run exceeded its token budget ({ctx.token_budget:,} tokens)."
+            )

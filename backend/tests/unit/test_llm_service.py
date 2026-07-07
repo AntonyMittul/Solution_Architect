@@ -57,6 +57,45 @@ async def test_auto_fake_generates_schema_valid_minimal_output() -> None:
     assert turn.clarifying_questions == []
 
 
+class AddingMeter:
+    """Accumulates tokens like the real Redis meter."""
+
+    def __init__(self) -> None:
+        self.total = 0
+
+    async def add(self, run_id: str, tokens: int) -> int:
+        self.total += tokens
+        return self.total
+
+
+async def test_budget_exceeded_raises_and_stops() -> None:
+    from aisa.shared.errors import BudgetExceededError
+
+    # The fake reports 30 tokens (10 in + 20 out) per call.
+    provider = FakeLLMProvider(responses=['{"value": 1, "label": "ok"}'])
+    llm = StructuredLLM(provider, NullUsageRecorder(), token_meter=AddingMeter())
+    ctx = LLMContext(run_id="r1", token_budget=25)
+    with pytest.raises(BudgetExceededError):
+        await llm.complete(system="s", messages=[], schema=Answer, ctx=ctx)
+
+
+async def test_within_budget_returns_normally() -> None:
+    provider = FakeLLMProvider(responses=['{"value": 3, "label": "ok"}'])
+    llm = StructuredLLM(provider, NullUsageRecorder(), token_meter=AddingMeter())
+    ctx = LLMContext(run_id="r1", token_budget=1000)
+    result = await llm.complete(system="s", messages=[], schema=Answer, ctx=ctx)
+    assert result.value == 3
+
+
+async def test_no_budget_never_enforces() -> None:
+    meter = AddingMeter()
+    provider = FakeLLMProvider(responses=['{"value": 9, "label": "ok"}'])
+    llm = StructuredLLM(provider, NullUsageRecorder(), token_meter=meter)
+    result = await llm.complete(system="s", messages=[], schema=Answer, ctx=LLMContext(run_id="r1"))
+    assert result.value == 9
+    assert meter.total == 0  # budget None -> meter not consulted
+
+
 async def test_usage_recorded_for_every_attempt() -> None:
     recorded: list[tuple[str | None, str | None]] = []
 

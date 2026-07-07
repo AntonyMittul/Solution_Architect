@@ -25,3 +25,10 @@ class UsageRecorder(Protocol):
     async def record(
         self, usage: TokenUsage, *, workspace_id: str | None, run_id: str | None
     ) -> None: ...
+
+
+class RunTokenMeter(Protocol):
+    """Accumulates tokens spent by a run; returns the running total. Backs the
+    per-run token budget (doc 03 NFR-4)."""
+
+    async def add(self, run_id: str, tokens: int) -> int: ...

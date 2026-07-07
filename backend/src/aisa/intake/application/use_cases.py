@@ -57,8 +57,7 @@ class PostMessage:
         # Resume doesn't consume quota; a new run does — check before storing.
         active = await self._runs.latest_for_project(project_id, INTAKE_KIND)
         resume = active is not None and active.awaiting_input
-        if not resume:
-            await self._run_guard.check(actor.workspace_id)
+        limits = None if resume else await self._run_guard.check(actor.workspace_id)
 
         thread = await self._threads.ensure_for_project(actor.workspace_id, project_id)
         await self._messages.append(
@@ -75,11 +74,13 @@ class PostMessage:
             await self._continue_run.execute(active.id)
             return PostMessageResult(thread_id=thread.id, run_id=active.id, resumed=True)
 
+        assert limits is not None  # set whenever not resuming
         run = await self._create_run.execute(
             INTAKE_KIND,
             workspace_id=actor.workspace_id,
             project_id=project_id,
             triggered_by=actor.user_id,
+            token_budget=limits.per_run_token_budget,
         )
         return PostMessageResult(thread_id=thread.id, run_id=run.id, resumed=False)
 

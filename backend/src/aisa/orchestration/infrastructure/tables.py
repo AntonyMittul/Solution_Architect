@@ -18,6 +18,7 @@ class RunRow(Base):
     project_id: Mapped[str | None] = mapped_column(String(26), index=True)
     triggered_by: Mapped[str | None] = mapped_column(String(26))
     input: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    token_budget: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

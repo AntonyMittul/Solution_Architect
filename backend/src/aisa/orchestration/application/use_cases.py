@@ -37,6 +37,7 @@ class CreateRun:
         project_id: str | None = None,
         triggered_by: str | None = None,
         input: dict[str, object] | None = None,
+        token_budget: int = 0,
     ) -> Run:
         if kind not in self._known_kinds:
             raise UnsupportedOperationError(f"Unsupported run kind '{kind}'")
@@ -48,6 +49,7 @@ class CreateRun:
             project_id=project_id,
             triggered_by=triggered_by,
             input=input,
+            token_budget=token_budget,
         )
         await self._repository.add(run)
         await self._queue.enqueue("run.execute", {"run_id": run.id, "kind": run.kind})

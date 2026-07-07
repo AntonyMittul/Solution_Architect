@@ -40,6 +40,7 @@ class Run:
     project_id: str | None = None
     triggered_by: str | None = None
     input: dict[str, object] = field(default_factory=dict)
+    token_budget: int = 0  # 0 = unlimited (e.g. ping runs); plan sets it otherwise
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
@@ -55,6 +56,7 @@ class Run:
         project_id: str | None = None,
         triggered_by: str | None = None,
         input: dict[str, object] | None = None,
+        token_budget: int = 0,
     ) -> Run:
         return cls(
             id=run_id,
@@ -65,6 +67,7 @@ class Run:
             project_id=project_id,
             triggered_by=triggered_by,
             input=input or {},
+            token_budget=token_budget,
         )
 
     def start(self, now: datetime) -> None:

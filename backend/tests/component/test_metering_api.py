@@ -72,6 +72,27 @@ async def test_run_quota_blocks_new_runs(container_factory: ContainerFactory) ->
         assert "run limit" in blocked.json()["detail"].lower()
 
 
+async def test_token_budget_fails_run(container_factory: ContainerFactory) -> None:
+    # A tiny per-run budget: the first analyst call (30 fake tokens) exceeds it,
+    # so the run stops gracefully and is marked failed.
+    container = container_factory(FakeLLMProvider(), free_run_token_budget=10)
+    async for client in _client_for(container):
+        ws = await _verified_owner(client)
+        pid = (await client.post(f"/api/v1/workspaces/{ws}/projects", json={"name": "App"})).json()[
+            "id"
+        ]
+        posted = await client.post(
+            f"/api/v1/workspaces/{ws}/projects/{pid}/messages", json={"text": "an app"}
+        )
+        run_id = posted.json()["run_id"]
+
+        await container.run_executors["intake"].execute(run_id)
+
+        run = (await client.get(f"/api/v1/runs/{run_id}")).json()
+        assert run["status"] == "failed"
+        assert "budget" in (run["error"] or "").lower()
+
+
 async def test_usage_requires_membership(container_factory: ContainerFactory) -> None:
     container = container_factory(FakeLLMProvider())
     async for client in _client_for(container):
