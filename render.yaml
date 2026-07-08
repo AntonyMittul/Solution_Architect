@@ -1,0 +1,111 @@
+# Render Blueprint — see docs/DEPLOY-RENDER.md for the walkthrough.
+#
+# Three services + two managed datastores:
+#   aisa-api     public HTTP (FastAPI). Runs `alembic upgrade head` on boot.
+#   aisa-worker  background worker: runs the intake + blueprint agent graphs.
+#   aisa-web     public HTTP (Next.js). The only service users hit directly.
+#
+# Secrets marked `sync: false` are NOT stored in git — set them in the Render
+# dashboard after the first deploy.
+
+databases:
+  - name: aisa-postgres
+    databaseName: aisa
+    plan: basic-256mb # `free` expires after 30 days
+    postgresMajorVersion: "16"
+
+services:
+  # ---------------------------------------------------------------- datastore
+  - type: redis
+    name: aisa-redis
+    plan: free
+    maxmemoryPolicy: noeviction # the job queue must not drop entries
+    ipAllowList: [] # private network only
+
+  # ---------------------------------------------------------------------- api
+  - type: web
+    name: aisa-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health/ready
+    # Migrations are expand/contract, so running them on boot is safe.
+    dockerCommand: sh -c "alembic upgrade head && uvicorn aisa.platform.app:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: AISA_ENV
+        value: production
+      - key: AISA_SECRET_KEY
+        generateValue: true # app refuses to boot outside dev without this
+      - key: AISA_DATABASE_URL
+        fromDatabase:
+          name: aisa-postgres
+          property: connectionString
+      - key: AISA_DATABASE_ADMIN_URL
+        fromDatabase:
+          name: aisa-postgres
+          property: connectionString
+      - key: AISA_REDIS_URL
+        fromService:
+          type: redis
+          name: aisa-redis
+          property: connectionString
+      - key: AISA_LLM_PROVIDER
+        value: gemini # set to `fake` to run without an API key
+      - key: AISA_GEMINI_API_KEY
+        sync: false
+      - key: AISA_MCP_CLIENT
+        value: fake # `http` for real MCP servers
+      - key: AISA_MCP_AUTH_TOKEN
+        sync: false
+      - key: AISA_OTEL_ENABLED
+        value: "false"
+
+  # ------------------------------------------------------------------- worker
+  - type: worker
+    name: aisa-worker
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter # Render has no free plan for background workers
+    dockerCommand: python -m aisa.platform.worker
+    envVars:
+      - key: AISA_ENV
+        value: production
+      - key: AISA_SECRET_KEY
+        fromService:
+          type: web
+          name: aisa-api
+          envVarKey: AISA_SECRET_KEY
+      - key: AISA_DATABASE_URL
+        fromDatabase:
+          name: aisa-postgres
+          property: connectionString
+      - key: AISA_REDIS_URL
+        fromService:
+          type: redis
+          name: aisa-redis
+          property: connectionString
+      - key: AISA_LLM_PROVIDER
+        value: gemini
+      - key: AISA_GEMINI_API_KEY
+        sync: false
+      - key: AISA_MCP_CLIENT
+        value: fake
+      - key: AISA_MCP_AUTH_TOKEN
+        sync: false
+      - key: AISA_OTEL_ENABLED
+        value: "false"
+
+  # ---------------------------------------------------------------------- web
+  - type: web
+    name: aisa-web
+    runtime: docker
+    rootDir: web
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      # Read at RUNTIME by the route handlers under app/api and app/health.
+      # Set to the api service's URL, e.g. https://aisa-api.onrender.com
+      - key: API_URL
+        sync: false

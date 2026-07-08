@@ -18,6 +18,7 @@ from aisa.platform.middleware import RequestContextMiddleware
 from aisa.platform.problem import register_problem_handlers
 from aisa.projects.api.router import router as projects_router
 from aisa.shared.config import Settings
+from aisa.shared.db import check_rls_enforcement
 from aisa.shared.logging import configure_logging
 from aisa.shared.telemetry import configure_metrics, configure_tracing
 
@@ -34,6 +35,8 @@ def create_app(container: Container | None = None) -> FastAPI:
             configure_tracing(settings, "aisa-api")
             configure_metrics(settings, "aisa-api")
             app.state.container = Container.build(settings)
+            if app.state.container.engine is not None:
+                await check_rls_enforcement(app.state.container.engine)
             try:
                 yield
             finally:

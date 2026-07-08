@@ -14,6 +14,7 @@ import aisa.integrations.infrastructure.tables
 import aisa.llm.infrastructure.usage
 import aisa.orchestration.infrastructure.tables
 import aisa.projects.infrastructure.tables
+from aisa.shared.config import normalize_async_dsn
 from aisa.shared.db import Base
 
 # Table modules must be imported so Base.metadata sees every table.
@@ -35,7 +36,8 @@ if config.config_file_name is not None:
 # role (table owner); the app runtime uses the restricted aisa_app role.
 database_url = os.environ.get("AISA_DATABASE_ADMIN_URL") or os.environ.get("AISA_DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    # Managed Postgres hands out postgres:// URLs; our engine needs asyncpg.
+    config.set_main_option("sqlalchemy.url", normalize_async_dsn(database_url))
 
 target_metadata = Base.metadata
 

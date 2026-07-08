@@ -1,4 +1,25 @@
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_async_dsn(url: str) -> str:
+    """Managed Postgres (Render, Heroku, …) hands out `postgres://` /
+    `postgresql://` URLs, sometimes with `?sslmode=…`. Our engine needs the
+    asyncpg driver, and asyncpg rejects the libpq-only `sslmode` parameter."""
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url.removeprefix("postgres://")
+    if url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")
+
+    parts = urlsplit(url)
+    if parts.query:
+        kept = [(k, v) for k, v in parse_qsl(parts.query) if k != "sslmode"]
+        url = urlunsplit(parts._replace(query=urlencode(kept)))
+    return url
 
 
 class Settings(BaseSettings):
@@ -43,6 +64,11 @@ class Settings(BaseSettings):
     otel_enabled: bool = False
     otel_endpoint: str = ""  # OTLP/HTTP endpoint; needs opentelemetry-exporter-otlp-proto-http
     otel_sample_ratio: float = 1.0
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        return normalize_async_dsn(value)
 
     @property
     def is_dev(self) -> bool:

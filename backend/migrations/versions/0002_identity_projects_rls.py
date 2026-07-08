@@ -68,22 +68,36 @@ def upgrade() -> None:
     # Runtime role: no BYPASSRLS, so row-level security actually applies.
     # Migrations keep running as the owning role. The dev password below is
     # overridden out-of-band in deployed environments (ALTER ROLE ... PASSWORD).
+    #
+    # On managed Postgres (Render, RDS, …) the provisioned user often lacks
+    # CREATEROLE. We skip the role rather than abort the migration: the app then
+    # connects as the owner, and FORCE ROW LEVEL SECURITY (below) keeps the
+    # policies applying to the owner too. A *superuser* would still bypass RLS —
+    # the app checks for that at startup and logs loudly.
     op.execute(
         """
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'aisa_app') THEN
-                CREATE ROLE aisa_app LOGIN PASSWORD 'aisa_app' NOBYPASSRLS;
+                BEGIN
+                    CREATE ROLE aisa_app LOGIN PASSWORD 'aisa_app' NOBYPASSRLS;
+                EXCEPTION WHEN insufficient_privilege THEN
+                    RAISE NOTICE
+                        'no privilege to CREATE ROLE aisa_app; the app will connect as the '
+                        'owner and FORCE RLS still applies';
+                END;
+            END IF;
+
+            IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'aisa_app') THEN
+                EXECUTE 'GRANT USAGE ON SCHEMA public TO aisa_app';
+                EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES '
+                        'IN SCHEMA public TO aisa_app';
+                EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public '
+                        'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO aisa_app';
             END IF;
         END
         $$
         """
-    )
-    op.execute("GRANT USAGE ON SCHEMA public TO aisa_app")
-    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO aisa_app")
-    op.execute(
-        "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO aisa_app"
     )
 
     # RLS: tenant isolation backstop (doc 05). FORCE so even the table owner
