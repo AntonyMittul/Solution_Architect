@@ -60,6 +60,7 @@ from aisa.intake.infrastructure.repositories import (
 )
 from aisa.integrations.application.agent import Provisioner
 from aisa.integrations.application.governor import ToolGovernor
+from aisa.integrations.application.ports import McpClient
 from aisa.integrations.application.use_cases import (
     ApproveProvisioningPlan,
     CreateProvisioningPlan,
@@ -73,6 +74,7 @@ from aisa.integrations.application.use_cases import (
     UpdateMcpServer,
 )
 from aisa.integrations.infrastructure.fake_client import FakeMcpClient
+from aisa.integrations.infrastructure.http_client import HttpMcpClient
 from aisa.integrations.infrastructure.repositories import (
     SqlMcpServerRepository,
     SqlProvisioningRepository,
@@ -277,11 +279,15 @@ class Container:
         )
         run_guard = RunGuard(workspaces, run_repository, plan_catalog, clock)
 
-        # integrations (MCP): fake client for now; a real streamable-HTTP
-        # adapter (mcp SDK) is a drop-in replacement behind the McpClient port.
+        # integrations (MCP): "fake" (default, key-less) or "http" (real
+        # streamable-HTTP via the mcp SDK) — both behind the McpClient port.
         mcp_servers = SqlMcpServerRepository(session_factory)
         provisioning = SqlProvisioningRepository(session_factory)
-        mcp_client = FakeMcpClient()
+        mcp_client: McpClient = (
+            HttpMcpClient(settings.mcp_auth_token)
+            if settings.mcp_client == "http"
+            else FakeMcpClient()
+        )
         governor = ToolGovernor()
         usage_service = UsageService(
             workspaces,

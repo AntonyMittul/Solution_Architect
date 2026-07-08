@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     pro_run_token_budget: int = 2_000_000
     llm_price_per_1m_tokens: float = 0.30
 
+    # MCP client: "fake" (deterministic, no network) or "http" (real streamable
+    # HTTP via the mcp SDK). For "http", set a bearer token (e.g. a GitHub PAT).
+    mcp_client: str = "fake"
+    mcp_auth_token: str = ""
+
     # Observability (doc 14). Off by default; spans are no-ops until enabled.
     otel_enabled: bool = False
     otel_endpoint: str = ""  # OTLP/HTTP endpoint; needs opentelemetry-exporter-otlp-proto-http
