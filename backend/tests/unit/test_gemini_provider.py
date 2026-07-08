@@ -97,6 +97,49 @@ async def test_retries_transient_errors_then_succeeds() -> None:
     assert len(sleeps) == 1  # backed off once before the successful retry
 
 
+async def test_rate_limit_honours_suggested_retry_delay() -> None:
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    rate_limited = RuntimeError(
+        "429 RESOURCE_EXHAUSTED. {'error': {'code': 429}, 'retryDelay': '26s'}"
+    )
+    client = _StubClient([rate_limited, _StubResponse('{"value": 1}', _Usage(1, 1))])
+    provider = GeminiProvider(client, MODELS, max_attempts=3, sleep=fake_sleep)
+
+    await provider.generate(system="s", messages=[], response_model=Answer, tier=ModelTier.FAST)
+    # Waits ~26s (the API's own suggestion) plus jitter — not the 0.5s default.
+    assert 26.0 <= sleeps[0] <= 33.0
+
+
+async def test_rate_limit_without_hint_backs_off_far_longer_than_transient() -> None:
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    client = _StubClient(
+        [RuntimeError("429 RESOURCE_EXHAUSTED"), _StubResponse('{"value": 1}', _Usage(1, 1))]
+    )
+    provider = GeminiProvider(
+        client, MODELS, max_attempts=3, rate_limit_backoff=20.0, sleep=fake_sleep
+    )
+    await provider.generate(system="s", messages=[], response_model=Answer, tier=ModelTier.FAST)
+    assert sleeps[0] >= 20.0  # vs 0.5s for an ordinary transient error
+
+
+async def test_rate_limit_exhaustion_raises_actionable_error() -> None:
+    async def fake_sleep(seconds: float) -> None:
+        return None
+
+    client = _StubClient([RuntimeError("429 RESOURCE_EXHAUSTED")] * 2)
+    provider = GeminiProvider(client, MODELS, max_attempts=2, sleep=fake_sleep)
+    with pytest.raises(LLMError, match="rate limit"):
+        await provider.generate(system="s", messages=[], response_model=Answer, tier=ModelTier.FAST)
+
+
 async def test_raises_after_exhausting_attempts() -> None:
     async def fake_sleep(seconds: float) -> None:
         return None

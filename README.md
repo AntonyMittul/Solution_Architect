@@ -7,39 +7,99 @@ technologies, estimates cloud costs, produces API specifications and database sc
 documentation, and can optionally provision repositories or infrastructure through the
 Model Context Protocol (MCP).
 
-**Status:** Building — roadmap milestone **M0 (Foundations)**. The walking skeleton is live:
-a request flows web → api → job queue → worker → event log → SSE → web, end to end.
+**Status:** Milestones **M0–M6 complete**. The full loop works end to end:
+sign up → conversational requirements intake → multi-agent blueprint → downloadable export →
+cost controls (metering, quotas, per-run token budget) → governed MCP provisioning →
+observability (traces + metrics).
+
+## What it does
+
+| Stage | What happens |
+|---|---|
+| **Intake** | A Requirements Analyst agent interviews you (max 5 questions/round, 3 rounds) and produces a versioned, structured requirements document you confirm. |
+| **Blueprint** | A LangGraph fan-out runs 8 agents in parallel — solution designer, tech stack, API, data model, diagram, cost, a design reviewer (with a repair loop), and a docs writer — producing 7 versioned artifacts with provenance. |
+| **Export** | One click downloads a ZIP: design doc, requirements, architecture, a valid **OpenAPI 3.1** spec, runnable **PostgreSQL DDL**, a **Mermaid** diagram, tech stack, and costs. |
+| **Cost control** | Per-workspace monthly run quotas and a hard **per-run token budget** enforced inside the orchestrator; a usage dashboard shows runs, tokens, and estimated cost. |
+| **Provisioning** | The provisioner *proposes* a plan of MCP tool calls; nothing executes until a human approves it. Tools must be explicitly allowlisted. |
 
 ## Repository Layout
 
 ```
-backend/   FastAPI + worker (one codebase, two processes) — src/aisa/<module>/{domain,application,infrastructure,api}
-web/       Next.js (App Router) + Tailwind
-docs/      Architecture & planning documents (see index below)
+backend/   FastAPI + worker (one codebase, two processes)
+           src/aisa/<module>/{domain,application,infrastructure,api}
+           modules: shared, llm, identity, projects, orchestration, intake,
+                    artifacts, blueprint, exports, metering, integrations, platform
+web/       Next.js (App Router) + Tailwind + React Flow
+docs/      Architecture & planning documents (see index below) + docs/adr/
 .github/   CI (lint, strict type checks, architecture contracts, tests, migrations, compose smoke)
 ```
 
-## Local Development
+Module boundaries are enforced in CI by **import-linter** (7 contracts): feature modules stay
+independent, domains are framework-free, and layering runs api → infrastructure → application → domain.
 
-Prereqs: Docker, Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node 22+.
+## Quick start
+
+Prereqs: **Docker Desktop**, **Python 3.12+** with [uv](https://docs.astral.sh/uv/), **Node 22+**.
 
 ```bash
-docker compose up -d postgres redis          # infrastructure
-cd backend && uv sync && uv run alembic upgrade head
-uv run uvicorn aisa.platform.app:app --reload --port 8000   # terminal 1: api
-uv run python -m aisa.platform.worker                        # terminal 2: worker
-cd ../web && npm install && npm run dev                      # terminal 3: web -> http://localhost:3000
+# 0. one-time install
+cd backend && uv sync && cd ../web && npm install && cd ..
+
+# 1. infrastructure
+docker compose up -d postgres redis
+
+# 2. database schema (idempotent)
+cd backend && uv run alembic upgrade head
+
+# 3. three long-running processes, one terminal each
+cd backend && uv run uvicorn aisa.platform.app:app --reload --port 8000   # API
+cd backend && uv run python -m aisa.platform.worker                        # worker (runs the agents)
+cd web     && npm run dev                                                  # web → http://localhost:3000
 ```
 
-**LLM (Gemini):** the requirements-intake agent uses Google Gemini
-(`gemini-3.1-flash-lite`). Set `AISA_GEMINI_API_KEY` in `backend/.env` to use it, or run with
-`AISA_LLM_PROVIDER=fake` for a deterministic, key-less stub (also what CI uses). See
-[ADR-002](docs/adr/ADR-002-llm-gemini-and-agent-layer.md) and
-[ADR-003](docs/adr/ADR-003-defer-langgraph-to-m3.md) for the provider and orchestration decisions.
+Open **http://localhost:3000**, register, click **Resend / verify** on the yellow banner (dev has no
+SMTP, so verification completes in-app), create a project, and describe an idea — or pick a
+template brief.
 
-Quality gates (same as CI): `cd backend && uv run ruff check . && uv run mypy && uv run lint-imports && uv run pytest`
-End-to-end smoke test: `cd backend && uv run python scripts/smoke.py`
-Full stack in containers: `docker compose up --build`
+Stop with `Ctrl+C` in each terminal, then `docker compose down`.
+
+### Configuration
+
+Copy `backend/.env.example` to `backend/.env` (git-ignored — **real secrets go only there**).
+
+| Variable | Purpose |
+|---|---|
+| `AISA_LLM_PROVIDER` | `gemini` (needs a key) or `fake` — deterministic, no network, no quota |
+| `AISA_GEMINI_API_KEY` | Google Gemini key; model is `gemini-3.1-flash-lite` |
+| `AISA_MCP_CLIENT` | `fake` (default) or `http` — real MCP over streamable HTTP |
+| `AISA_MCP_AUTH_TOKEN` | Bearer token for the MCP server (e.g. a GitHub PAT) |
+| `AISA_OTEL_ENABLED` | `true` to emit traces + metrics (console in dev, OTLP with an endpoint) |
+
+**Everything runs key-less.** With `AISA_LLM_PROVIDER=fake` the whole app works end to end with
+schema-valid placeholder content — no API key, no network, no quota. That's what CI uses.
+
+### Verifying
+
+```bash
+cd backend
+uv run pytest                       # 120 tests (unit + component against real Postgres/Redis)
+uv run ruff check . && uv run mypy && uv run lint-imports   # lint, strict types, architecture
+uv run python scripts/smoke.py      # walking-skeleton smoke against a running api+worker
+docker compose up --build           # the whole stack in containers
+```
+
+### Troubleshooting
+
+- **No verification email.** Expected — SMTP is not wired. Click **Resend / verify** on the banner
+  (dev returns the token and verifies in-app), or copy the `verify_path` printed in the API terminal.
+- **`429 RESOURCE_EXHAUSTED` / blueprint run fails.** Your Gemini quota is exhausted. The app retries
+  with backoff (honouring the API's `retryDelay`) and then fails the run cleanly. Wait for the quota
+  window, or set `AISA_LLM_PROVIDER=fake` to keep working.
+- **Postgres/Redis refused.** Start Docker Desktop, then `docker compose up -d postgres redis`.
+
+See [ADR-002](docs/adr/ADR-002-llm-gemini-and-agent-layer.md) (Gemini behind an `LLMService` port;
+no PydanticAI) and [ADR-003](docs/adr/ADR-003-defer-langgraph-to-m3.md) (LangGraph scoped to the
+blueprint graph) for the key implementation decisions.
 
 ## Documentation Index
 
