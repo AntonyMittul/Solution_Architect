@@ -7,7 +7,13 @@ endpoint; in dev, spans print to the console; tests inject an in-memory exporter
 """
 
 import structlog
-from opentelemetry import trace
+from opentelemetry import metrics, trace
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import (
+    ConsoleMetricExporter,
+    MetricExporter,
+    PeriodicExportingMetricReader,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -53,8 +59,40 @@ def configure_tracing(settings: Settings, service_name: str) -> None:
     logger.info("otel.configured", service=service_name, endpoint=settings.otel_endpoint or None)
 
 
+def _select_metric_exporter(settings: Settings) -> MetricExporter | None:
+    if settings.otel_endpoint:
+        try:
+            from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+        except ImportError:
+            logger.warning("otel.otlp_metrics_unavailable")
+            return None
+        otlp: MetricExporter = OTLPMetricExporter(endpoint=settings.otel_endpoint)
+        return otlp
+    if settings.is_dev:
+        return ConsoleMetricExporter()
+    return None
+
+
+def configure_metrics(settings: Settings, service_name: str) -> None:
+    """Install a MeterProvider so the module-level instruments in
+    aisa.shared.metrics start recording. No-op unless AISA_OTEL_ENABLED."""
+    if not settings.otel_enabled:
+        return
+    exporter = _select_metric_exporter(settings)
+    readers = [PeriodicExportingMetricReader(exporter)] if exporter is not None else []
+    provider = MeterProvider(
+        resource=Resource.create({"service.name": service_name}), metric_readers=readers
+    )
+    metrics.set_meter_provider(provider)
+    logger.info("otel.metrics_configured", service=service_name)
+
+
 def get_tracer(name: str) -> trace.Tracer:
     return trace.get_tracer(name)
+
+
+def get_meter(name: str) -> metrics.Meter:
+    return metrics.get_meter(name)
 
 
 def current_trace_id() -> str | None:

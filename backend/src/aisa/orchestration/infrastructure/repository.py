@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aisa.orchestration.domain.run import Run, RunStatus
 from aisa.orchestration.infrastructure.tables import RunRow
 from aisa.shared.errors import NotFoundError
+from aisa.shared.metrics import record_run_outcome
 
 SessionFactory = Callable[[], AsyncSession]
 
@@ -35,6 +36,10 @@ class SqlAlchemyRunRepository:
             row.error = run.error
             row.started_at = run.started_at
             row.finished_at = run.finished_at
+        # Executors save a run once at its terminal transition, so this counts
+        # each outcome once.
+        if run.is_terminal:
+            record_run_outcome(run.kind, run.status.value)
 
     async def latest_for_project(self, project_id: str, kind: str) -> Run | None:
         async with self._session_factory() as session:

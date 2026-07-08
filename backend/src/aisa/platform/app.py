@@ -19,7 +19,7 @@ from aisa.platform.problem import register_problem_handlers
 from aisa.projects.api.router import router as projects_router
 from aisa.shared.config import Settings
 from aisa.shared.logging import configure_logging
-from aisa.shared.telemetry import configure_tracing
+from aisa.shared.telemetry import configure_metrics, configure_tracing
 
 
 def create_app(container: Container | None = None) -> FastAPI:
@@ -32,6 +32,7 @@ def create_app(container: Container | None = None) -> FastAPI:
             settings = Settings()
             configure_logging(settings.log_level, json_logs=not settings.is_dev)
             configure_tracing(settings, "aisa-api")
+            configure_metrics(settings, "aisa-api")
             app.state.container = Container.build(settings)
             try:
                 yield

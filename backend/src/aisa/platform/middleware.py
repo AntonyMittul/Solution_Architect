@@ -4,6 +4,7 @@ import time
 import structlog
 
 from aisa.shared.ids import new_id
+from aisa.shared.metrics import record_http_request
 from aisa.shared.telemetry import current_trace_id, get_tracer
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -48,6 +49,7 @@ class RequestContextMiddleware:
             finally:
                 duration_ms = round((time.perf_counter() - start) * 1000, 1)
                 span.set_attribute("http.response.status_code", status_holder["status"])
+                record_http_request(scope["method"], status_holder["status"], duration_ms)
                 logger.info(
                     "http.request",
                     method=scope["method"],

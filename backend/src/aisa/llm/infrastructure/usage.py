@@ -7,6 +7,7 @@ from aisa.llm.domain.messages import TokenUsage
 from aisa.shared.clock import Clock
 from aisa.shared.db import Base, SessionFactory
 from aisa.shared.ids import new_id
+from aisa.shared.metrics import record_llm_tokens
 
 
 class LLMUsageRow(Base):
@@ -41,6 +42,7 @@ class SqlUsageRecorder:
                     created_at=self._clock.now(),
                 )
             )
+        record_llm_tokens(usage.model, usage.input_tokens, usage.output_tokens)
 
 
 class NullUsageRecorder:
