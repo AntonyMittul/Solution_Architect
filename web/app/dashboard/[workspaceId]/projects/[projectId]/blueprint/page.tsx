@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+
+import { useRunStatus } from "@/features/runs/use-run-status";
 
 import { DiagramCanvas } from "@/components/diagram-canvas";
 import { MarkdownView } from "@/components/markdown";
@@ -60,6 +62,7 @@ export default function BlueprintPage() {
   const [runningAgent, setRunningAgent] = useState<string | null>(null);
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<ArtifactType>("design_doc");
+  const [runError, setRunError] = useState<string | null>(null);
 
   const role = workspaces?.find((w) => w.id === workspaceId)?.role;
   const canWrite = role ? canWriteProjects(role) : false;
@@ -87,9 +90,23 @@ export default function BlueprintPage() {
   );
   useRunStream(activeRunId, onEvent);
 
+  // Correctness net: a buffered/blocked event stream must not strand the UI on
+  // a long 8-agent run. Polling also surfaces the failure reason.
+  const runStatus = useRunStatus(activeRunId);
+  const status = runStatus.data?.status;
+  useEffect(() => {
+    if (status === "completed" || status === "failed" || status === "cancelled") {
+      if (status === "failed") setRunError(runStatus.data?.error ?? "The blueprint run failed.");
+      qc.invalidateQueries({ queryKey: artifactsKey(workspaceId, projectId) });
+      setActiveRunId(null);
+      setRunningAgent(null);
+    }
+  }, [status, runStatus.data?.error, qc, workspaceId, projectId]);
+
   async function generate() {
     setCompleted(new Set());
     setRunningAgent(null);
+    setRunError(null);
     const result = await start.mutateAsync();
     setActiveRunId(result.run_id);
   }
@@ -158,6 +175,7 @@ export default function BlueprintPage() {
 
       {generating && <GenerationProgress running={runningAgent} completed={completed} />}
       {start.isError && <ErrorText>{(start.error as Error).message}</ErrorText>}
+      {runError && <ErrorText>{runError}</ErrorText>}
 
       {artifacts.isLoading && <Spinner />}
 
