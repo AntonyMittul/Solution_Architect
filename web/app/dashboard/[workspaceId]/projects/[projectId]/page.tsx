@@ -16,6 +16,7 @@ import {
 } from "@/features/intake/use-intake";
 import { useRunStream } from "@/features/runs/use-run-stream";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+import { TEMPLATE_BRIEFS } from "@/lib/briefs";
 import type { ChatMessage, Requirements, RequirementsContent } from "@/lib/types";
 import { canWriteProjects } from "@/lib/types";
 
@@ -90,10 +91,26 @@ export default function ProjectIntakePage() {
           {messages.isError && <ErrorText>{(messages.error as Error).message}</ErrorText>}
 
           {messages.data && messages.data.length === 0 && !thinking && (
-            <Banner tone="slate">
-              Describe your software idea to begin — e.g. “Build a food delivery app for one
-              million users.”
-            </Banner>
+            <div className="space-y-3">
+              <Banner tone="slate">
+                Describe your software idea to begin — e.g. “Build a food delivery app for one
+                million users.”
+              </Banner>
+              {canWrite && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-500">Start from a template:</span>
+                  {TEMPLATE_BRIEFS.map((brief) => (
+                    <button
+                      key={brief.id}
+                      onClick={() => setText(brief.prompt)}
+                      className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-indigo-500 hover:text-indigo-300"
+                    >
+                      {brief.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           <ul className="space-y-3">
